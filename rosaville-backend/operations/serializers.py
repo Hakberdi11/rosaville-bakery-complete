@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Customer, Feedback, InventoryItem, Order, Task
+from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Task
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -22,6 +22,17 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class GiftCardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GiftCard
+        fields = "__all__"
+        read_only_fields = ["id", "current_balance", "redemption_history", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        validated_data["current_balance"] = validated_data["initial_balance"]
+        return super().create(validated_data)
 
 
 class FeedbackSerializer(serializers.ModelSerializer):

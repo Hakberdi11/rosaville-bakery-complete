@@ -92,7 +92,20 @@ export const entities = {
   NewsletterSubscriber: makeResource("newsletter-subscribers"),
   TeamMember: makeResource("team-members"),
   CustomCakeOrder: makeResource("custom-cake-orders"),
+  GiftCard: makeResource("gift-cards"),
 };
+
+export async function lookupGiftCard(code) {
+  return request(`/api/gift-cards/lookup/?code=${encodeURIComponent(code)}`);
+}
+
+export async function adjustGiftCard(id, delta) {
+  return request(`/api/gift-cards/${id}/adjust/`, { method: "POST", body: JSON.stringify({ delta }) });
+}
+
+export async function voidGiftCard(id) {
+  return request(`/api/gift-cards/${id}/void/`, { method: "POST" });
+}
 
 export const siteContent = {
   get: () => request("/api/site-content/"),

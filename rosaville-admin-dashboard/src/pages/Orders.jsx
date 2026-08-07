@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { entities } from '@/lib/api';
-import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { entities, lookupGiftCard } from '@/lib/api';
+import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2, Gift } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,6 +191,11 @@ function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
             <div className="col-span-2"><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Address</div><div className="font-medium">{order.address || "—"}</div></div>
             <div><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Delivery Date</div><div className="font-medium">{order.delivery_date ? new Date(order.delivery_date).toLocaleDateString() : "—"}</div></div>
             <div><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Total</div><div className="font-semibold text-[15px]">${(order.total_value || 0).toFixed(2)}</div></div>
+            {Number(order.gift_card_amount_applied) > 0 && (
+              <div className="col-span-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Gift className="w-3.5 h-3.5" /> ${Number(order.gift_card_amount_applied).toFixed(2)} applied from gift card {order.gift_card_code}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground uppercase mb-1.5">Items</div>
@@ -231,9 +236,38 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCard, setGiftCard] = useState(null); // looked-up card, or null
+  const [giftCardError, setGiftCardError] = useState("");
+  const [giftCardChecking, setGiftCardChecking] = useState(false);
+  const [giftCardAmount, setGiftCardAmount] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
   useEffect(() => {
-    if (open) setForm({ customer_name: "", email: "", phone: "", address: "", delivery_date: "", internal_notes: "", items: [] });
+    if (open) {
+      setForm({ customer_name: "", email: "", phone: "", address: "", delivery_date: "", internal_notes: "", items: [] });
+      setGiftCardCode(""); setGiftCard(null); setGiftCardError(""); setGiftCardAmount("");
+      setSubmitError("");
+    }
   }, [open]);
+
+  const checkGiftCard = async () => {
+    if (!giftCardCode.trim()) return;
+    setGiftCardChecking(true);
+    setGiftCardError(""); setGiftCard(null);
+    try {
+      const card = await lookupGiftCard(giftCardCode.trim());
+      if (!card.is_active) { setGiftCardError("This gift card has been voided."); }
+      else if (Number(card.current_balance) <= 0) { setGiftCardError("This gift card has no remaining balance."); }
+      else {
+        setGiftCard(card);
+        setGiftCardAmount(String(Math.min(Number(card.current_balance), total)));
+      }
+    } catch (e) {
+      setGiftCardError(e.status === 404 ? "No gift card found with that code." : (e.message || "Could not look up this gift card."));
+    }
+    setGiftCardChecking(false);
+  };
 
   const addItem = () => set("items", [...form.items, { dessert_id: "", name: "", quantity: 1, price: 0, size: "Standard", size_multiplier: 1 }]);
   const updateItem = (i, field, value) => {
@@ -259,20 +293,28 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
   const removeItem = (i) => set("items", form.items.filter((_, idx) => idx !== i));
 
   const total = form.items.reduce((s, it) => s + (it.quantity || 0) * (it.price || 0), 0);
+  const appliedAmount = giftCard ? Math.min(Number(giftCardAmount) || 0, Number(giftCard.current_balance), total) : 0;
 
   const submit = async () => {
     setSaving(true);
+    setSubmitError("");
     try {
       await entities.Order.create({
         ...form,
+        delivery_date: form.delivery_date || null,
         order_number: "RV-" + Math.floor(1000 + Math.random() * 9000),
         total_value: total,
         status: "Pending",
-        payment_status: "Unpaid",
+        payment_status: appliedAmount >= total && total > 0 ? "Paid" : appliedAmount > 0 ? "Partially Paid" : "Unpaid",
         channel: "Website",
+        gift_card_code: giftCard ? giftCard.code : "",
+        gift_card_amount_applied: appliedAmount,
       });
       onCreated(); onClose();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setSubmitError(e.message || "Could not create this order. Please check the fields and try again.");
+    }
     setSaving(false);
   };
 
@@ -287,6 +329,34 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
           <div className="col-span-2"><Label>Address</Label><Input value={form.address} onChange={(e) => set("address", e.target.value)} className="mt-1" /></div>
           <div><Label>Delivery Date</Label><Input type="date" value={form.delivery_date} onChange={(e) => set("delivery_date", e.target.value)} className="mt-1" /></div>
           <div><Label>Total (auto)</Label><Input value={`$${total.toFixed(2)}`} readOnly className="mt-1 font-semibold" /></div>
+
+          {/* Gift card redemption */}
+          <div className="col-span-2 rounded-xl border border-border/60 p-2.5 space-y-2">
+            <Label className="text-[12px] flex items-center gap-1.5"><Gift className="w-3.5 h-3.5" /> Gift Card (optional)</Label>
+            {!giftCard ? (
+              <div className="flex items-center gap-2">
+                <Input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())} placeholder="Gift card code" className="h-9 text-[12.5px] font-mono" />
+                <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={checkGiftCard} disabled={giftCardChecking || !giftCardCode.trim()}>
+                  {giftCardChecking ? "Checking…" : "Apply"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-[12.5px] font-mono">{giftCard.code}</span>
+                <span className="text-[11.5px] text-muted-foreground">balance ${Number(giftCard.current_balance).toFixed(2)}</span>
+                <div className="relative w-24 ml-auto">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
+                  <Input type="number" step="0.01" min="0" max={Math.min(Number(giftCard.current_balance), total)} value={giftCardAmount}
+                    onChange={(e) => setGiftCardAmount(e.target.value)} className="h-8 pl-5 text-[12.5px]" />
+                </div>
+                <button type="button" onClick={() => { setGiftCard(null); setGiftCardCode(""); setGiftCardAmount(""); }} className="w-8 h-8 rounded-lg border border-border hover:bg-muted flex items-center justify-center shrink-0">
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+            {giftCardError && <p className="text-[11.5px] text-rose-600">{giftCardError}</p>}
+            {giftCard && <p className="text-[11.5px] text-muted-foreground">Applying ${appliedAmount.toFixed(2)} · remaining total ${Math.max(total - appliedAmount, 0).toFixed(2)}</p>}
+          </div>
 
           {/* Line items */}
           <div className="col-span-2">
@@ -336,6 +406,7 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
           )}
 
           <div className="col-span-2"><Label>Internal Notes</Label><Textarea value={form.internal_notes} onChange={(e) => set("internal_notes", e.target.value)} className="mt-1" rows={2} /></div>
+          {submitError && <p className="col-span-2 text-[12.5px] text-rose-600">{submitError}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

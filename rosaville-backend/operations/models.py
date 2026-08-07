@@ -93,6 +93,8 @@ class Order(models.Model):
     address = models.CharField(max_length=500, blank=True)
     items = models.JSONField(default=list, blank=True)  # [{name, dessert_id, quantity, price, size, size_multiplier}]
     total_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gift_card_code = models.CharField(max_length=30, blank=True)
+    gift_card_amount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
@@ -107,6 +109,28 @@ class Order(models.Model):
 
     def __str__(self):
         return self.order_number or f"Order #{self.pk}"
+
+
+class GiftCard(models.Model):
+    code = models.CharField(max_length=30, unique=True)
+    initial_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    current_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    recipient_name = models.CharField(max_length=255, blank=True)
+    recipient_email = models.EmailField(blank=True)
+    purchaser_name = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+    # [{order_id, order_number, amount, date}], newest first — same JSON-log
+    # pattern as Dessert.ingredients; no separate Redemption model needed yet.
+    redemption_history = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.code
 
 
 class Feedback(models.Model):
