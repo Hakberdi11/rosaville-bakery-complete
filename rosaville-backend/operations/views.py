@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework import filters, viewsets
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsAdminOrManagerOrOwner, IsStaff
@@ -34,6 +35,16 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [CreateOnlyOrIsStaff]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = "__all__"
+
+    def perform_create(self, serializer):
+        order = serializer.save()
+        # Simple punch-card loyalty: 1 point per whole dollar spent, awarded to
+        # any existing Customer whose email matches the order. No customer
+        # accounts/FK exist yet, so email is the only link available.
+        if order.email:
+            Customer.objects.filter(email=order.email).update(
+                loyalty_points=models.F("loyalty_points") + int(order.total_value)
+            )
 
 
 class FeedbackViewSet(viewsets.ModelViewSet):

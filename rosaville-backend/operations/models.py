@@ -20,6 +20,11 @@ class Customer(models.Model):
     tags = models.JSONField(default=list, blank=True)
     segment = models.CharField(max_length=20, choices=Segment.choices, default=Segment.NEW)
     notes = models.TextField(blank=True)
+    # Simple punch-card style loyalty: 1 point per $1 spent, awarded automatically
+    # when an Order's email matches this customer (see OrderViewSet.perform_create),
+    # plus manual adjustment from the dashboard. Deliberately not a tiered/enterprise
+    # loyalty system — see .claude/research/dashboard-gap-analysis.md item #2.
+    loyalty_points = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
