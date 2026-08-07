@@ -19,6 +19,7 @@ import Inventory from '@/pages/Inventory';
 import Reports from '@/pages/Reports';
 import Analytics from '@/pages/Analytics';
 import ContactRequests from '@/pages/ContactRequests';
+import CustomCakeOrders from '@/pages/CustomCakeOrders';
 import Gallery from '@/pages/Gallery';
 import Production from '@/pages/Production';
 import Recipes from '@/pages/Recipes';
@@ -57,6 +58,7 @@ const AuthenticatedApp = () => {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/contact" element={<ContactRequests />} />
+          <Route path="/custom-cake-orders" element={<CustomCakeOrders />} />
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/production" element={<Production />} />
           <Route path="/recipes" element={<Recipes />} />

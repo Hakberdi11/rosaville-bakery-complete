@@ -37,6 +37,20 @@ class ContactRequest(models.Model):
 
 
 class CustomCakeOrder(models.Model):
+    """Custom cake requests submitted from the public site's Custom Cakes form.
+    Staff triage these on the dashboard's Custom Cake Orders page: set status,
+    record a deposit, and optionally convert an accepted request into a real
+    `operations.Order` once production is ready to be scheduled."""
+
+    class Status(models.TextChoices):
+        NEW = "New", "New"
+        REVIEWED = "Reviewed", "Reviewed"
+        QUOTED = "Quoted", "Quoted"
+        CONFIRMED = "Confirmed", "Confirmed"
+        IN_PRODUCTION = "In Production", "In Production"
+        COMPLETED = "Completed", "Completed"
+        CANCELLED = "Cancelled", "Cancelled"
+
     name = models.CharField(max_length=255)
     email = models.EmailField()
     phone = models.CharField(max_length=20)
@@ -44,8 +58,15 @@ class CustomCakeOrder(models.Model):
     cake_size = models.CharField(max_length=100)
     flavor = models.CharField(max_length=255)
     custom_requests = models.TextField(blank=True)
-    preferred_date = models.CharField(max_length=50)
+    preferred_date = models.DateField(null=True, blank=True)
     inspiration_image_url = models.URLField(max_length=500, blank=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+    deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    deposit_paid = models.BooleanField(default=False)
+    order = models.ForeignKey(
+        "operations.Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="custom_cake_requests"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

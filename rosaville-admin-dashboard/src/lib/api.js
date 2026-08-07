@@ -91,6 +91,7 @@ export const entities = {
   SpecialOfMonth: makeResource("specials"),
   NewsletterSubscriber: makeResource("newsletter-subscribers"),
   TeamMember: makeResource("team-members"),
+  CustomCakeOrder: makeResource("custom-cake-orders"),
 };
 
 export const siteContent = {
