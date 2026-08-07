@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { FileBarChart, Download, Calendar } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,10 @@ export default function Reports() {
     (async () => {
       try {
         const [o, c, i, f] = await Promise.all([
-          base44.entities.Order.list("-created_date", 1000),
-          base44.entities.Customer.list("-created_date", 500),
-          base44.entities.InventoryItem.list("-created_date", 500),
-          base44.entities.Feedback.list("-created_date", 500),
+          entities.Order.list("-created_date", 1000),
+          entities.Customer.list("-created_date", 500),
+          entities.InventoryItem.list("-created_date", 500),
+          entities.Feedback.list("-created_date", 500),
         ]);
         setOrders(o); setCustomers(c); setInventory(i); setFeedback(f);
       } catch (e) { console.error(e); }

@@ -24,33 +24,33 @@ export default function Navigation() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-[#FDF7F3]/95 backdrop-blur-sm border-b border-[#E8D4C8] shadow-sm">
+    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border shadow-sm">
       <div className="container flex items-center justify-between h-16">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <RoseIcon className="w-8 h-8" />
-          <span className="font-serif text-xl font-bold text-[#8B6F47]" style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>Rosaville</span>
+          <span className="font-serif text-xl font-bold text-foreground" style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>Rosaville</span>
         </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="font-sans text-sm font-medium text-[#8B6F47] hover:text-[#A0845C] transition-colors">
+            <Link key={link.href} href={link.href} className="font-sans text-sm font-medium text-foreground hover:text-accent transition-colors">
               {link.label}
             </Link>
           ))}
-          <Link href="/favourites" className="relative p-2 hover:bg-[#F0E8DC] rounded-lg transition-colors">
-            <Heart size={20} className="text-[#8B6F47]" />
+          <Link href="/favourites" className="relative p-2 hover:bg-muted rounded-lg transition-colors">
+            <Heart size={20} className="text-foreground" />
             {favourites.length > 0 && (
-              <span className="absolute top-0 right-0 bg-[#C9949B] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+              <span className="absolute top-0 right-0 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
                 {favourites.length}
               </span>
             )}
           </Link>
-          <Link href="/cart" className="relative p-2 hover:bg-[#F0E8DC] rounded-lg transition-colors">
-            <ShoppingBag size={20} className="text-[#8B6F47]" />
+          <Link href="/cart" className="relative p-2 hover:bg-muted rounded-lg transition-colors">
+            <ShoppingBag size={20} className="text-foreground" />
             {items.length > 0 && (
-              <span className="absolute top-0 right-0 bg-[#A0845C] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+              <span className="absolute top-0 right-0 bg-accent text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
                 {items.length}
               </span>
             )}
@@ -73,7 +73,7 @@ export default function Navigation() {
       {isOpen && (
         <div
           id="mobile-menu"
-          className="md:hidden border-t border-[#E8D4C8] bg-[#FDF7F3] animate-in fade-in slide-in-from-top-2 duration-200"
+          className="md:hidden border-t border-border bg-background animate-in fade-in slide-in-from-top-2 duration-200"
           role="navigation"
           aria-label="Mobile navigation"
         >
@@ -83,7 +83,7 @@ export default function Navigation() {
                 key={link.href}
                 href={link.href}
                 onClick={closeMenu}
-                className="block py-2 px-3 font-sans text-sm font-medium text-[#8B6F47] hover:text-[#A0845C] hover:bg-[#F0E8DC] rounded-lg transition-colors"
+                className="block py-2 px-3 font-sans text-sm font-medium text-foreground hover:text-accent hover:bg-muted rounded-lg transition-colors"
               >
                 {link.label}
               </Link>
@@ -91,7 +91,7 @@ export default function Navigation() {
             <Link
               href="/favourites"
               onClick={closeMenu}
-              className="flex items-center gap-2 py-2 px-3 font-sans text-sm font-medium text-[#8B6F47] hover:text-[#A0845C] hover:bg-[#F0E8DC] rounded-lg transition-colors"
+              className="flex items-center gap-2 py-2 px-3 font-sans text-sm font-medium text-foreground hover:text-accent hover:bg-muted rounded-lg transition-colors"
             >
               <Heart size={18} />
               Favourites {favourites.length > 0 && `(${favourites.length})`}
@@ -99,7 +99,7 @@ export default function Navigation() {
             <Link
               href="/cart"
               onClick={closeMenu}
-              className="flex items-center gap-2 py-2 px-3 font-sans text-sm font-medium text-[#8B6F47] hover:text-[#A0845C] hover:bg-[#F0E8DC] rounded-lg transition-colors"
+              className="flex items-center gap-2 py-2 px-3 font-sans text-sm font-medium text-foreground hover:text-accent hover:bg-muted rounded-lg transition-colors"
             >
               <ShoppingBag size={18} />
               Cart {items.length > 0 && `(${items.length})`}

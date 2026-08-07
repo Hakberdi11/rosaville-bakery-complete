@@ -1,4 +1,5 @@
 import { Star } from "lucide-react";
+import { Link } from "wouter";
 
 interface Testimonial {
   id: string;
@@ -58,14 +59,14 @@ const testimonials: Testimonial[] = [
  */
 export default function Testimonials() {
   return (
-    <section className="w-full bg-[#FBF7F4] py-20 md:py-32 px-4">
+    <section className="w-full bg-background py-20 md:py-32 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-16">
-          <h2 className="font-serif text-4xl md:text-5xl font-bold text-[#3D2817] mb-4">
+          <h2 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4">
             What Our Customers Say
           </h2>
-          <p className="font-sans text-lg text-[#5F3F1B]/70">
+          <p className="font-sans text-lg text-foreground/70">
             Join hundreds of satisfied customers who've experienced our handcrafted desserts
           </p>
         </div>
@@ -75,7 +76,7 @@ export default function Testimonials() {
           {testimonials.map((testimonial) => (
             <div
               key={testimonial.id}
-              className="bg-white rounded-2xl p-8 shadow-lg border border-[#E8B4B8] hover:shadow-xl transition-shadow"
+              className="bg-white rounded-2xl p-8 shadow-lg border border-primary hover:shadow-xl transition-shadow"
             >
               {/* Rating Stars */}
               <div className="flex gap-1 mb-4">
@@ -83,13 +84,13 @@ export default function Testimonials() {
                   <Star
                     key={i}
                     size={18}
-                    className="fill-[#C9949B] text-[#C9949B]"
+                    className="fill-primary text-primary"
                   />
                 ))}
               </div>
 
               {/* Testimonial Content */}
-              <p className="font-sans text-[#5F3F1B] leading-relaxed mb-6 italic">
+              <p className="font-sans text-foreground leading-relaxed mb-6 italic">
                 "{testimonial.content}"
               </p>
 
@@ -98,13 +99,13 @@ export default function Testimonials() {
                 <img
                   src={testimonial.imageUrl}
                   alt={testimonial.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-[#C9949B]"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-primary"
                 />
                 <div>
-                  <p className="font-serif font-bold text-[#3D2817]">
+                  <p className="font-serif font-bold text-foreground">
                     {testimonial.name}
                   </p>
-                  <p className="font-sans text-sm text-[#5F3F1B]/60">
+                  <p className="font-sans text-sm text-foreground/60">
                     {testimonial.role}
                   </p>
                 </div>
@@ -115,15 +116,15 @@ export default function Testimonials() {
 
         {/* CTA */}
         <div className="text-center mt-16">
-          <p className="font-sans text-[#5F3F1B]/70 mb-4">
+          <p className="font-sans text-foreground/70 mb-4">
             Ready to create your own sweet memory?
           </p>
-          <a
+          <Link
             href="/menu"
-            className="inline-block bg-[#C9949B] hover:bg-[#C97A85] text-white font-sans font-semibold px-8 py-3 rounded-full transition-all"
+            className="inline-block bg-primary hover:bg-accent text-white font-sans font-semibold px-8 py-3 rounded-full transition-all"
           >
             Explore Our Menu
-          </a>
+          </Link>
         </div>
       </div>
     </section>

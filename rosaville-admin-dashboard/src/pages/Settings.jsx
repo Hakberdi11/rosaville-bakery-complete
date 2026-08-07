@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { base44 } from "@/api/base44Client";
+import { auth } from '@/lib/api';
 import { Settings as SettingsIcon, Save, Store, Globe, Bell } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export default function Settings() {
   const save = async () => {
     setSaving(true);
     try {
-      await base44.auth.updateMe(form);
+      await auth.updateMe(form);
       await checkUserAuth();
       toast({ title: "Settings saved", description: "Your business profile has been updated." });
     } catch (e) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Megaphone, TrendingUp, MousePointerClick, Eye, DollarSign } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
@@ -26,7 +26,7 @@ export default function Marketing() {
 
   const load = async () => {
     setLoading(true);
-    try { setOrders(await base44.entities.Order.list("-created_date", 500)); }
+    try { setOrders(await entities.Order.list("-created_date", 500)); }
     catch (e) { console.error(e); }
     setLoading(false);
   };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { trpc } from '@/lib/trpc';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function CustomCakes() {
@@ -18,29 +18,6 @@ export default function CustomCakes() {
   const [imagePreview, setImagePreview] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const submitOrder = trpc.customCakes.submitOrder.useMutation({
-    onSuccess: () => {
-      toast.success('Your custom cake order has been submitted! We\'ll be in touch soon.');
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        occasion: '',
-        cakeSize: '',
-        flavor: '',
-        customRequests: '',
-        preferredDate: '',
-      });
-      setImageFile(null);
-      setImagePreview('');
-      setIsSubmitting(false);
-    },
-    onError: () => {
-      toast.error('Failed to submit order. Please try again.');
-      setIsSubmitting(false);
-    },
-  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -70,31 +47,53 @@ export default function CustomCakes() {
       return;
     }
     setIsSubmitting(true);
-    await submitOrder.mutateAsync(formData);
+    try {
+      let inspirationImageUrl: string | undefined;
+      if (imageFile) {
+        try {
+          const { file_url } = await api.uploadFile(imageFile);
+          inspirationImageUrl = file_url;
+        } catch {
+          toast.error('Could not upload your inspiration image, submitting without it.');
+        }
+      }
+      await api.customCakes.submit({ ...formData, inspirationImageUrl });
+      toast.success('Your custom cake order has been submitted! We\'ll be in touch soon.');
+      setFormData({
+        name: '', email: '', phone: '', occasion: '', cakeSize: '', flavor: '',
+        customRequests: '', preferredDate: '',
+      });
+      setImageFile(null);
+      setImagePreview('');
+    } catch {
+      toast.error('Failed to submit order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="w-full">
       {/* Header */}
-      <section className="py-16 bg-[#FBF7F4]">
+      <section className="py-16 bg-background">
         <div className="container text-center fade-in">
-          <h1 className="font-serif text-5xl md:text-6xl font-bold text-[#3D2817] mb-4">
+          <h1 className="font-serif text-5xl md:text-6xl font-bold text-foreground mb-4">
             Custom Cakes
           </h1>
-          <p className="font-sans text-lg text-[#3D2817]/70 max-w-2xl mx-auto">
+          <p className="font-sans text-lg text-foreground/70 max-w-2xl mx-auto">
             Create your perfect dessert. Tell us your vision, and we'll bring it to life.
           </p>
         </div>
       </section>
 
       {/* Form Section */}
-      <section className="py-20 bg-[#FBF7F4]">
+      <section className="py-20 bg-background">
         <div className="container max-w-2xl fade-in-up">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name and Email */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Your Name *
                 </label>
                 <input
@@ -103,12 +102,12 @@ export default function CustomCakes() {
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Jane Doe"
                 />
               </div>
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Email *
                 </label>
                 <input
@@ -117,7 +116,7 @@ export default function CustomCakes() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="jane@example.com"
                 />
               </div>
@@ -126,7 +125,7 @@ export default function CustomCakes() {
             {/* Phone and Occasion */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Phone Number *
                 </label>
                 <input
@@ -135,12 +134,12 @@ export default function CustomCakes() {
                   value={formData.phone}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="(555) 123-4567"
                 />
               </div>
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Occasion *
                 </label>
                 <select
@@ -148,7 +147,7 @@ export default function CustomCakes() {
                   value={formData.occasion}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select an occasion</option>
                   <option value="birthday">Birthday</option>
@@ -164,7 +163,7 @@ export default function CustomCakes() {
             {/* Cake Size and Flavor */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Cake Size *
                 </label>
                 <select
@@ -172,7 +171,7 @@ export default function CustomCakes() {
                   value={formData.cakeSize}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select size</option>
                   <option value="6-inch">6 inch (4-6 servings)</option>
@@ -182,7 +181,7 @@ export default function CustomCakes() {
                 </select>
               </div>
               <div>
-                <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+                <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                   Flavor *
                 </label>
                 <select
@@ -190,7 +189,7 @@ export default function CustomCakes() {
                   value={formData.flavor}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                  className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select flavor</option>
                   <option value="chocolate">Chocolate</option>
@@ -205,7 +204,7 @@ export default function CustomCakes() {
 
             {/* Preferred Date */}
             <div>
-              <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+              <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                 Preferred Delivery Date *
               </label>
               <input
@@ -214,13 +213,13 @@ export default function CustomCakes() {
                 value={formData.preferredDate}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8]"
+                className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             {/* Custom Requests */}
             <div>
-              <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+              <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                 Custom Requests & Design Ideas
               </label>
               <textarea
@@ -228,17 +227,17 @@ export default function CustomCakes() {
                 value={formData.customRequests}
                 onChange={handleChange}
                 rows={5}
-                className="w-full px-4 py-3 rounded-lg border border-[#E8B4B8] bg-[#FBF7F4] font-sans focus:outline-none focus:ring-2 focus:ring-[#E8B4B8] resize-none"
+                className="w-full px-4 py-3 rounded-lg border border-primary bg-background font-sans focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 placeholder="Tell us about your vision, colors, decorations, dietary requirements, etc."
               />
             </div>
 
             {/* Image Upload */}
             <div>
-              <label className="block font-sans text-sm font-semibold text-[#3D2817] mb-2">
+              <label className="block font-sans text-sm font-semibold text-foreground mb-2">
                 Inspiration Image (Optional)
               </label>
-              <div className="border-2 border-dashed border-[#E8B4B8] rounded-lg p-6 text-center hover:border-[#E8B4B8] transition-colors cursor-pointer">
+              <div className="border-2 border-dashed border-primary rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
                 <input
                   type="file"
                   accept="image/*"
@@ -250,12 +249,12 @@ export default function CustomCakes() {
                   {imagePreview ? (
                     <div className="space-y-3">
                       <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
-                      <p className="font-sans text-sm text-[#3D2817]/60">Click to change image</p>
+                      <p className="font-sans text-sm text-foreground/60">Click to change image</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <p className="font-sans font-semibold text-[#3D2817]">Drop image here or click to upload</p>
-                      <p className="font-sans text-sm text-[#3D2817]/60">PNG, JPG up to 5MB</p>
+                      <p className="font-sans font-semibold text-foreground">Drop image here or click to upload</p>
+                      <p className="font-sans text-sm text-foreground/60">PNG, JPG up to 5MB</p>
                     </div>
                   )}
                 </label>
@@ -266,13 +265,13 @@ export default function CustomCakes() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-[#E8B4B8] hover:bg-[#E8B4B8]/90 text-white font-sans font-semibold py-3 rounded-lg hover-lift"
+              className="w-full bg-primary hover:bg-primary/90 text-white font-sans font-semibold py-3 rounded-lg hover-lift"
             >
               {isSubmitting ? 'Submitting...' : 'Submit Custom Cake Request'}
             </Button>
           </form>
 
-          <p className="font-sans text-sm text-[#3D2817]/60 text-center mt-6">
+          <p className="font-sans text-sm text-foreground/60 text-center mt-6">
             We typically respond within 24 hours. For urgent requests, please call us directly.
           </p>
         </div>

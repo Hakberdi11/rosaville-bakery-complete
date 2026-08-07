@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Bell, ShoppingBag, Star, Inbox, AlertTriangle, ListTodo, Clock } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
@@ -12,11 +12,11 @@ export default function Notifications() {
     (async () => {
       try {
         const [orders, feedback, contacts, inventory, tasks] = await Promise.all([
-          base44.entities.Order.list("-created_date", 20),
-          base44.entities.Feedback.list("-created_date", 10),
-          base44.entities.ContactRequest.list("-created_date", 10),
-          base44.entities.InventoryItem.list("-created_date", 500),
-          base44.entities.Task.list("-created_date", 50),
+          entities.Order.list("-created_date", 20),
+          entities.Feedback.list("-created_date", 10),
+          entities.ContactRequest.list("-created_date", 10),
+          entities.InventoryItem.list("-created_date", 500),
+          entities.Task.list("-created_date", 50),
         ]);
         const events = [];
         orders.forEach((o) => events.push({ id: "o" + o.id, type: "order", icon: ShoppingBag, color: "blue", title: `New order ${o.order_number || ""} from ${o.customer_name}`, sub: `$${(o.total_value || 0).toFixed(0)} · ${o.status}`, date: o.created_date }));

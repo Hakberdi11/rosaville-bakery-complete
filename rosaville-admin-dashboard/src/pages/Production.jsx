@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Factory, Clock, ArrowRight, ChefHat, AlertTriangle, CalendarDays, Layers, ListChecks } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
@@ -39,9 +39,9 @@ export default function Production() {
     setLoading(true);
     try {
       const [o, d, i] = await Promise.all([
-        base44.entities.Order.list("-delivery_date", 500),
-        base44.entities.Dessert.list("-display_order", 500),
-        base44.entities.InventoryItem.list("-created_date", 500),
+        entities.Order.list("-delivery_date", 500),
+        entities.Dessert.list("-display_order", 500),
+        entities.InventoryItem.list("-created_date", 500),
       ]);
       setOrders(o); setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
@@ -52,7 +52,7 @@ export default function Production() {
   const advance = async (order) => {
     const next = NEXT[order.status];
     if (!next) return;
-    await base44.entities.Order.update(order.id, { status: next });
+    await entities.Order.update(order.id, { status: next });
     setOrders((p) => p.map((o) => (o.id === order.id ? { ...o, status: next } : o)));
   };
 
@@ -136,7 +136,7 @@ function ScheduleView({ orders, desserts, onAdvance }) {
                 <div key={o.id} className="px-5 py-3 flex items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[12.5px] font-semibold">{o.order_number || `#${o.id.slice(-6)}`}</span>
+                      <span className="text-[12.5px] font-semibold">{o.order_number || `#${String(o.id).slice(-6)}`}</span>
                       <span className="text-[13px] font-medium">{o.customer_name}</span>
                       <span className="text-[10.5px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{o.status}</span>
                     </div>
@@ -258,7 +258,7 @@ function BoardView({ orders, desserts, inventory, onAdvance }) {
                 return (
                   <div key={o.id} className="rounded-xl border border-border/60 bg-card p-3.5">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-semibold">{o.order_number || `#${o.id.slice(-6)}`}</span>
+                      <span className="text-[12px] font-semibold">{o.order_number || `#${String(o.id).slice(-6)}`}</span>
                       {o.delivery_date && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><Clock className="w-3 h-3" /> {new Date(o.delivery_date).toLocaleDateString()}</span>}
                     </div>
                     <div className="text-[13px] font-medium mb-1">{o.customer_name}</div>

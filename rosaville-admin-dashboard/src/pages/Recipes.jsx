@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { ChefHat, Search, TrendingUp, TrendingDown, Plus, Pencil, X } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,8 @@ export default function Recipes() {
     setLoading(true);
     try {
       const [d, i] = await Promise.all([
-        base44.entities.Dessert.list("-display_order", 500),
-        base44.entities.InventoryItem.list("-created_date", 500),
+        entities.Dessert.list("-display_order", 500),
+        entities.InventoryItem.list("-created_date", 500),
       ]);
       setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
@@ -136,8 +136,8 @@ function RecipeDialog({ open, item, inventory, onClose, onSaved }) {
     setSaving(true);
     try {
       const payload = { ...form, price: Number(form.price) || 0 };
-      if (isEdit) await base44.entities.Dessert.update(item.id, payload);
-      else await base44.entities.Dessert.create(payload);
+      if (isEdit) await entities.Dessert.update(item.id, payload);
+      else await entities.Dessert.create(payload);
       onSaved(); onClose();
     } catch (e) { console.error(e); }
     setSaving(false);

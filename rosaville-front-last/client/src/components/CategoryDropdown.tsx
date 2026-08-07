@@ -47,7 +47,7 @@ export default function CategoryDropdown({
       {/* Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-white border-2 border-[#C9949B] hover:border-[#C97A85] text-[#3D2817] font-sans font-semibold px-6 py-3 rounded-full transition-all flex items-center justify-between"
+        className="w-full bg-white border-2 border-primary hover:border-accent text-foreground font-sans font-semibold px-6 py-3 rounded-full transition-all flex items-center justify-between"
       >
         <span className="truncate">{selectedCategory}</span>
         <ChevronDown
@@ -58,14 +58,14 @@ export default function CategoryDropdown({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full mt-2 w-full bg-white border-2 border-[#C9949B] rounded-2xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full mt-2 w-full bg-white border-2 border-primary rounded-2xl shadow-xl z-50 overflow-hidden">
           {categories.map((category, index) => (
             <button
               key={category}
               onClick={() => handleSelectCategory(category)}
-              className={`w-full text-left px-6 py-3 font-sans text-[#3D2817] hover:bg-[#FBF7F4] transition-colors ${
-                selectedCategory === category ? "bg-[#E8B4B8] font-semibold" : ""
-              } ${index !== categories.length - 1 ? "border-b border-[#E8B4B8]" : ""}`}
+              className={`w-full text-left px-6 py-3 font-sans text-foreground hover:bg-background transition-colors ${
+                selectedCategory === category ? "bg-primary font-semibold" : ""
+              } ${index !== categories.length - 1 ? "border-b border-primary" : ""}`}
             >
               {category}
             </button>

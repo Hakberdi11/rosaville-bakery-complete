@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Users, Search, Plus, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export default function Customers() {
 
   const load = async () => {
     setLoading(true);
-    try { setCustomers(await base44.entities.Customer.list("-total_spend", 500)); }
+    try { setCustomers(await entities.Customer.list("-total_spend", 500)); }
     catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -140,7 +140,7 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
     setSaving(true);
     try {
       const updated = { ...customer, notes, segment };
-      await base44.entities.Customer.update(customer.id, { notes, segment });
+      await entities.Customer.update(customer.id, { notes, segment });
       onUpdated(updated);
     } catch (e) { console.error(e); }
     setSaving(false);
@@ -204,7 +204,7 @@ function CreateCustomerDialog({ open, onClose, onCreated }) {
   const submit = async () => {
     setSaving(true);
     try {
-      await base44.entities.Customer.create({ ...form, total_spend: 0, order_count: 0, average_order_value: 0, tags: [] });
+      await entities.Customer.create({ ...form, total_spend: 0, order_count: 0, average_order_value: 0, tags: [] });
       onCreated(); onClose();
       setForm({ name: "", email: "", phone: "", address: "", segment: "New" });
     } catch (e) { console.error(e); }

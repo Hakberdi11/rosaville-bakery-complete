@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2 } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,9 @@ export default function Orders() {
     setLoading(true);
     try {
       const [o, d, i] = await Promise.all([
-        base44.entities.Order.list("-created_date", 500),
-        base44.entities.Dessert.list("-display_order", 500),
-        base44.entities.InventoryItem.list("-created_date", 500),
+        entities.Order.list("-created_date", 500),
+        entities.Dessert.list("-display_order", 500),
+        entities.InventoryItem.list("-created_date", 500),
       ]);
       setOrders(o); setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
@@ -46,7 +46,7 @@ export default function Orders() {
   }), [orders, search, statusFilter]);
 
   const updateStatus = async (id, status) => {
-    await base44.entities.Order.update(id, { status });
+    await entities.Order.update(id, { status });
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     if (selected?.id === id) setSelected({ ...selected, status });
   };
@@ -94,7 +94,7 @@ export default function Orders() {
             {filtered.map((o) => (
               <button key={o.id} onClick={() => setSelected(o)} className="w-full text-left p-4 hover:bg-muted/30">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-medium text-[13.5px]">{o.order_number || `#${o.id.slice(-6)}`}</span>
+                  <span className="font-medium text-[13.5px]">{o.order_number || `#${String(o.id).slice(-6)}`}</span>
                   <StatusBadge status={o.status} />
                 </div>
                 <div className="text-[13px] font-medium truncate">{o.customer_name}</div>
@@ -123,7 +123,7 @@ export default function Orders() {
               <tbody>
                 {filtered.map((o) => (
                   <tr key={o.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelected(o)}>
-                    <td className="px-4 py-3 font-medium">{o.order_number || `#${o.id.slice(-6)}`}</td>
+                    <td className="px-4 py-3 font-medium">{o.order_number || `#${String(o.id).slice(-6)}`}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{o.customer_name}</div>
                       <div className="text-[11.5px] text-muted-foreground">{o.email}</div>
@@ -183,7 +183,7 @@ function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
   return (
     <Dialog open={!!order} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Order {order.order_number || `#${order.id.slice(-6)}`}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Order {order.order_number || `#${String(order.id).slice(-6)}`}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Customer</div><div className="font-medium">{order.customer_name}</div></div>
@@ -263,7 +263,7 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
   const submit = async () => {
     setSaving(true);
     try {
-      await base44.entities.Order.create({
+      await entities.Order.create({
         ...form,
         order_number: "RV-" + Math.floor(1000 + Math.random() * 9000),
         total_value: total,

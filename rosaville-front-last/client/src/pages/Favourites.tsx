@@ -9,40 +9,40 @@ export default function Favourites() {
   const { favourites, removeFavourite } = useFavourites();
 
   return (
-    <div className="w-full bg-[#FBF7F4] min-h-screen">
+    <div className="w-full bg-background min-h-screen">
       {/* Header */}
-      <section className="py-8 md:py-12 bg-[#FBF7F4]">
+      <section className="py-8 md:py-12 bg-background">
         <div className="container">
           <button
             onClick={() => navigate("/")}
-            className="text-[#5F3F1B] hover:text-[#3D2817] font-sans text-sm font-semibold mb-4 md:mb-6 transition-colors"
+            className="text-foreground hover:text-foreground font-sans text-sm font-semibold mb-4 md:mb-6 transition-colors"
           >
             ← Back to Home
           </button>
-          <h1 className="font-serif text-3xl md:text-5xl font-bold text-[#3D2817]">
+          <h1 className="font-serif text-3xl md:text-5xl font-bold text-foreground">
             My Favourites
           </h1>
-          <p className="font-sans text-base md:text-lg text-[#5F3F1B]/80 mt-2">
+          <p className="font-sans text-base md:text-lg text-foreground/80 mt-2">
             Your saved cakes and gallery picks
           </p>
         </div>
       </section>
 
       {/* Favourites Grid */}
-      <section className="py-12 md:py-20 bg-[#FBF7F4]">
+      <section className="py-12 md:py-20 bg-background">
         <div className="container">
           {favourites.length === 0 ? (
             <div className="text-center py-20">
-              <Heart size={48} className="mx-auto text-[#C9949B]/40 mb-6" />
-              <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#3D2817] mb-3">
+              <Heart size={48} className="mx-auto text-primary/40 mb-6" />
+              <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-3">
                 No Favourites Yet
               </h2>
-              <p className="font-sans text-[#5F3F1B]/80 mb-8 max-w-md mx-auto">
+              <p className="font-sans text-foreground/80 mb-8 max-w-md mx-auto">
                 Start adding your favorite cakes to your collection. Visit our gallery or menu to find cakes you love!
               </p>
               <Button
                 onClick={() => navigate("/gallery")}
-                className="bg-[#C9949B] hover:bg-[#C97A85] text-white font-sans font-semibold px-8 py-3 rounded-lg hover-lift transition-all"
+                className="bg-primary hover:bg-accent text-white font-sans font-semibold px-8 py-3 rounded-lg hover-lift transition-all"
               >
                 Explore Gallery
               </Button>
@@ -52,10 +52,10 @@ export default function Favourites() {
               {favourites.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow border border-[#E8B4B8] group"
+                  className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow border border-primary group"
                 >
                   {/* Image Container */}
-                  <div className="relative h-64 md:h-80 overflow-hidden bg-[#FBF7F4]">
+                  <div className="relative h-64 md:h-80 overflow-hidden bg-background">
                     <img
                       src={item.image}
                       alt={item.name}
@@ -76,20 +76,20 @@ export default function Favourites() {
 
                   {/* Content */}
                   <div className="p-6">
-                    <h3 className="font-serif text-xl font-semibold text-[#3D2817] mb-2">
+                    <h3 className="font-serif text-xl font-semibold text-foreground mb-2">
                       {item.name}
                     </h3>
-                    <p className="font-sans text-sm text-[#5F3F1B]/70 mb-4">
+                    <p className="font-sans text-sm text-foreground/70 mb-4">
                       Category: <span className="capitalize font-semibold">{item.category}</span>
                     </p>
                     {item.price > 0 && (
-                      <p className="font-serif text-lg font-bold text-[#C9949B] mb-4">
+                      <p className="font-serif text-lg font-bold text-primary mb-4">
                         ${item.price.toFixed(2)}
                       </p>
                     )}
                     <Button
-                      onClick={() => navigate("/menu")}
-                      className="w-full bg-[#C9949B] hover:bg-[#C97A85] text-white font-sans font-semibold px-4 py-2 rounded-lg hover-lift transition-all"
+                      onClick={() => navigate(`/product/${item.id}`)}
+                      className="w-full bg-primary hover:bg-accent text-white font-sans font-semibold px-4 py-2 rounded-lg hover-lift transition-all"
                     >
                       View Details
                     </Button>

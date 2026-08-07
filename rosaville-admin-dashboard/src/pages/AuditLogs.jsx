@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { ScrollText, ShoppingBag, Users, Star, Package, ListTodo, Inbox } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
@@ -12,17 +12,17 @@ export default function AuditLogs() {
     (async () => {
       try {
         const [orders, customers, feedback, inventory, tasks, contacts] = await Promise.all([
-          base44.entities.Order.list("-created_date", 30),
-          base44.entities.Customer.list("-created_date", 20),
-          base44.entities.Feedback.list("-created_date", 20),
-          base44.entities.InventoryItem.list("-updated_date", 20),
-          base44.entities.Task.list("-created_date", 20),
-          base44.entities.ContactRequest.list("-created_date", 20),
+          entities.Order.list("-created_date", 30),
+          entities.Customer.list("-created_date", 20),
+          entities.Feedback.list("-created_date", 20),
+          entities.InventoryItem.list("-updated_date", 20),
+          entities.Task.list("-created_date", 20),
+          entities.ContactRequest.list("-created_date", 20),
         ]);
         const entries = [];
         const push = (arr, type, icon, color, label) => arr.forEach((r) => entries.push({
           id: type + r.id, type, icon, color,
-          action: label, target: r.name || r.title || r.customer_name || r.order_number || r.id.slice(-6),
+          action: label, target: r.name || r.title || r.customer_name || r.order_number || String(r.id).slice(-6),
           by: r.created_by || r.updated_by || "system",
           date: r.updated_date || r.created_date,
         }));

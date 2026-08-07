@@ -3,59 +3,16 @@ import { useLocation } from "wouter";
 import React from "react";
 import { useFavourites } from "@/contexts/FavouritesContext";
 import { toast } from "sonner";
+import { api, type Dessert } from "@/lib/api";
 
 /**
  * Gallery Carousel Page - Full Screen Art Gallery
- * 7 distinct vertical cake images with compact layout
+ * Curated desserts (dashboard's Gallery -> "Add from Menu"), shown full-bleed.
  */
 
-// 7 distinct vertical cake images - REAL CAKE PHOTOS
-const GALLERY_IMAGES = [
-  {
-    id: 1,
-    name: "Lavender Dream Cake",
-    description: "Delicate lavender-infused sponge with white chocolate ganache. Each layer is carefully crafted with premium lavender essence and topped with silky white chocolate ganache for an elegant finish.",
-    imageUrl: "https://images.pexels.com/photos/291528/pexels-photo-291528.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 2,
-    name: "Strawberry Bliss",
-    description: "Fresh strawberry layers with vanilla cream and shortcake. Ripe, juicy strawberries are layered with fluffy vanilla sponge and whipped cream, creating a refreshing and delightful dessert.",
-    imageUrl: "https://images.pexels.com/photos/1126359/pexels-photo-1126359.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 3,
-    name: "Chocolate Elegance",
-    description: "Rich dark chocolate cake with silky ganache and gold leaf. Indulge in layers of moist chocolate sponge, decadent chocolate ganache, and a touch of edible gold for ultimate luxury.",
-    imageUrl: "https://images.pexels.com/photos/3407857/pexels-photo-3407857.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 4,
-    name: "Matcha Serenity",
-    description: "Premium matcha green tea cake with white chocolate mousse. A harmonious blend of earthy matcha and sweet white chocolate creates a sophisticated and unforgettable taste experience.",
-    imageUrl: "https://images.pexels.com/photos/1092730/pexels-photo-1092730.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 5,
-    name: "Pistachio Dream",
-    description: "Creamy pistachio layers with rose water and pistachios. Nutty pistachio sponge is paired with delicate rose water cream and topped with roasted pistachio pieces for texture and elegance.",
-    imageUrl: "https://images.pexels.com/photos/1126360/pexels-photo-1126360.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 6,
-    name: "Lemon Sunshine",
-    description: "Bright lemon sponge with tangy lemon curd and meringue. Zesty lemon flavors shine through in every bite, balanced with smooth lemon curd and topped with fluffy Italian meringue.",
-    imageUrl: "https://images.pexels.com/photos/1126361/pexels-photo-1126361.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-  {
-    id: 7,
-    name: "Velvet Rose",
-    description: "Luxurious rose-flavored cake with raspberry coulis and edible flowers. A romantic blend of delicate rose essence, tart raspberry sauce, and hand-placed edible flowers create pure elegance.",
-    imageUrl: "https://images.pexels.com/photos/1126362/pexels-photo-1126362.jpeg?auto=compress&cs=tinysrgb&w=600&h=900&fit=crop",
-  },
-];
-
 export default function GalleryCarousel() {
+  const [images, setImages] = React.useState<Dessert[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -64,7 +21,11 @@ export default function GalleryCarousel() {
   const [, navigate] = useLocation();
   const { isFavourite, addFavourite, removeFavourite } = useFavourites();
 
-  const currentCake = GALLERY_IMAGES[currentIndex];
+  React.useEffect(() => {
+    api.desserts.listGallery().then(setImages).catch(() => {}).finally(() => setLoaded(true));
+  }, []);
+
+  const currentCake = images[currentIndex];
   const TIMER_DURATION = 5000; // 5 seconds
 
   // Block all scrolling and swiping except carousel
@@ -99,7 +60,7 @@ export default function GalleryCarousel() {
       setProgress((prev) => {
         const newProgress = prev + (100 / (TIMER_DURATION / 100));
         if (newProgress >= 100) {
-          setCurrentIndex((prev) => (prev + 1) % GALLERY_IMAGES.length);
+          setCurrentIndex((prev) => (prev + 1) % images.length);
           return 0;
         }
         return newProgress;
@@ -110,12 +71,12 @@ export default function GalleryCarousel() {
   }, [isPaused]);
 
   const handlePrevious = () => {
-    setCurrentIndex((prev) => (prev - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length);
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
     setProgress(0);
   };
 
   const handleNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % GALLERY_IMAGES.length);
+    setCurrentIndex((prev) => (prev + 1) % images.length);
     setProgress(0);
   };
 
@@ -137,6 +98,19 @@ export default function GalleryCarousel() {
     navigate("/gallery");
   };
 
+  if (loaded && !currentCake) {
+    return (
+      <div className="w-screen h-screen bg-black flex items-center justify-center">
+        <div className="text-center text-white px-4">
+          <p className="mb-4">Our gallery is being freshened up — check back soon!</p>
+          <button onClick={handleGoBack} className="underline">← Back to Gallery</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentCake) return null;
+
   return (
     <div
       className="w-screen h-screen bg-black overflow-hidden relative"
@@ -146,7 +120,7 @@ export default function GalleryCarousel() {
       {/* Main Image */}
       <img
         key={currentCake.id}
-        src={currentCake.imageUrl}
+        src={currentCake.featured_image || "/placeholder-dessert.svg"}
         alt={currentCake.name}
         className="w-full h-full object-cover"
         loading="eager"
@@ -166,7 +140,7 @@ export default function GalleryCarousel() {
                 {currentCake.name}
               </h2>
               <p className="text-white/60 text-sm mt-1">
-                {currentIndex + 1} of {GALLERY_IMAGES.length}
+                {currentIndex + 1} of {images.length}
               </p>
             </div>
 
@@ -245,7 +219,7 @@ export default function GalleryCarousel() {
                 id: currentCake.id,
                 name: currentCake.name,
                 price: 0,
-                image: currentCake.imageUrl,
+                image: currentCake.featured_image || "/placeholder-dessert.svg",
                 category: 'gallery'
               });
               toast.success(`${currentCake.name} added to favourites`);

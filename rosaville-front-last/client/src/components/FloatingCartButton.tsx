@@ -30,7 +30,7 @@ export default function FloatingCartButton() {
       onClick={() => navigate('/cart')}
       className={`
         fixed right-6 md:hidden
-        bg-[#A8C9B8] hover:bg-[#96B8A6] text-white
+        bg-cta hover:bg-cta-hover text-white
         rounded-full p-4 shadow-lg hover:shadow-xl
         transition-all duration-300 z-40
         flex items-center justify-center

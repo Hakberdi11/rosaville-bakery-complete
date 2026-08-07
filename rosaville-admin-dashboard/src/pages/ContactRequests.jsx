@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Inbox, Search, Mail, Phone, Trash2, Pencil } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default function ContactRequests() {
 
   const load = async () => {
     setLoading(true);
-    try { setRequests(await base44.entities.ContactRequest.list("-created_date", 500)); }
+    try { setRequests(await entities.ContactRequest.list("-created_date", 500)); }
     catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -35,14 +35,14 @@ export default function ContactRequests() {
   }), [requests, search, statusFilter]);
 
   const updateStatus = async (id, status) => {
-    await base44.entities.ContactRequest.update(id, { status });
+    await entities.ContactRequest.update(id, { status });
     setRequests((p) => p.map((r) => (r.id === id ? { ...r, status } : r)));
     if (selected?.id === id) setSelected({ ...selected, status });
   };
 
   const remove = async (r) => {
     if (!confirm(`Delete request from ${r.name}?`)) return;
-    await base44.entities.ContactRequest.delete(r.id);
+    await entities.ContactRequest.delete(r.id);
     setRequests((p) => p.filter((x) => x.id !== r.id));
     setSelected(null);
   };
@@ -171,7 +171,7 @@ function CreateRequestDialog({ open, onClose, onCreated }) {
   const submit = async () => {
     setSaving(true);
     try {
-      await base44.entities.ContactRequest.create({ ...form, status: "New" });
+      await entities.ContactRequest.create({ ...form, status: "New" });
       onCreated(); onClose();
       setForm({ name: "", email: "", phone: "", subject: "", message: "", source: "Website" });
     } catch (e) { console.error(e); }

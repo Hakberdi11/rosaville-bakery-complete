@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { TrendingUp, DollarSign, ShoppingBag, Users, Star } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
@@ -18,10 +18,10 @@ export default function Analytics() {
     setLoading(true);
     try {
       const [o, c, d, f] = await Promise.all([
-        base44.entities.Order.list("-created_date", 1000),
-        base44.entities.Customer.list("-created_date", 500),
-        base44.entities.Dessert.list("-display_order", 500),
-        base44.entities.Feedback.list("-created_date", 500),
+        entities.Order.list("-created_date", 1000),
+        entities.Customer.list("-created_date", 500),
+        entities.Dessert.list("-display_order", 500),
+        entities.Feedback.list("-created_date", 500),
       ]);
       setOrders(o); setCustomers(c); setDesserts(d); setFeedback(f);
     } catch (e) { console.error(e); }

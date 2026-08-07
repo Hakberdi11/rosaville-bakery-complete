@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { useAuth } from "@/lib/AuthContext";
 import { ListTodo, Plus, Search, Trash2, Pencil, Calendar, User2, Flag } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
@@ -36,10 +36,10 @@ export default function Tasks() {
   const load = async () => {
     setLoading(true);
     try {
-      const t = await base44.entities.Task.list("-created_date", 500);
+      const t = await entities.Task.list("-created_date", 500);
       setTasks(t);
       if (canManage) {
-        try { setUsers(await base44.entities.User.list("-created_date", 500)); }
+        try { setUsers(await entities.User.list("-created_date", 500)); }
         catch (e) { console.error(e); }
       }
     } catch (e) { console.error(e); }
@@ -55,7 +55,7 @@ export default function Tasks() {
 
   const updateStatus = async (id, status) => {
     try {
-      await base44.entities.Task.update(id, { status });
+      await entities.Task.update(id, { status });
       setTasks((p) => p.map((t) => (t.id === id ? { ...t, status } : t)));
       if (editTask?.id === id) setEditTask({ ...editTask, status });
     } catch (e) { console.error(e); alert("You can only update tasks assigned to you."); }
@@ -63,7 +63,7 @@ export default function Tasks() {
 
   const remove = async (t) => {
     if (!confirm(`Delete "${t.title}"?`)) return;
-    await base44.entities.Task.delete(t.id);
+    await entities.Task.delete(t.id);
     setTasks((p) => p.filter((x) => x.id !== t.id));
   };
 
@@ -156,8 +156,8 @@ function TaskDialog({ open, task, users, canManage, onClose, onSaved, onStatus }
   const submit = async () => {
     setSaving(true);
     try {
-      if (isEdit) await base44.entities.Task.update(task.id, form);
-      else await base44.entities.Task.create(form);
+      if (isEdit) await entities.Task.update(task.id, form);
+      else await entities.Task.create(form);
       onSaved(); onClose();
     } catch (e) { console.error(e); }
     setSaving(false);

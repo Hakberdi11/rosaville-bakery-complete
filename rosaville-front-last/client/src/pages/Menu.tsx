@@ -1,10 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { toast } from 'sonner';
 import QuantitySelector from '@/components/QuantitySelector';
 import CategoryDropdown from '@/components/CategoryDropdown';
+import { api, type Dessert } from '@/lib/api';
+
+function toMenuItem(d: Dessert) {
+  return {
+    id: d.id,
+    name: d.name,
+    category: d.category,
+    description: d.description,
+    price: Number(d.price),
+    image: d.featured_image || '/placeholder-dessert.svg',
+    allergens: d.allergens || [],
+    preparationTime: d.preparation_time || '',
+    availability: d.availability,
+  };
+}
 
 export default function Menu() {
   const [, navigate] = useLocation();
@@ -12,31 +27,15 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [quantitySelectorOpen, setQuantitySelectorOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [menuItems, setMenuItems] = useState<ReturnType<typeof toMenuItem>[]>([]);
+  const [categories, setCategories] = useState(['all']);
 
-  const categories = ['all', 'cakes', 'pastries', 'cookies', 'cheesecakes', 'coffee'];
-
-  const menuItems = [
-    // Cakes
-    { id: 1, name: 'Chocolate Decadence', category: 'cakes', description: 'Rich dark chocolate cake with silky ganache', price: 4.50, image: '/manus-storage/chocolate-cake_4df9a7a5.jpg' },
-    { id: 2, name: 'Vanilla Dream', category: 'cakes', description: 'Classic vanilla cake with buttercream frosting', price: 3.99, image: '/manus-storage/caramel-cake_f84bcba5.jpg' },
-    { id: 3, name: 'Strawberry Bliss', category: 'cakes', description: 'Fresh strawberry cake with whipped cream', price: 4.99, image: '/manus-storage/strawberry-cake-hero.jpg' },
-    { id: 4, name: 'Lemon Sunshine', category: 'cakes', description: 'Bright lemon cake with tangy glaze', price: 4.25, image: '/manus-storage/golden-chocolate-cake_7df42831.jpg' },
-    // Pastries
-    { id: 5, name: 'Croissant', category: 'pastries', description: 'Buttery, flaky French croissant', price: 3.50, image: '/manus-storage/chocolate-cake_4df9a7a5.jpg' },
-    { id: 6, name: 'Danish Pastry', category: 'pastries', description: 'Sweet danish with fruit filling', price: 3.75, image: '/manus-storage/caramel-cake_f84bcba5.jpg' },
-    { id: 7, name: 'Éclair', category: 'pastries', description: 'Chocolate-topped choux pastry with cream', price: 3.99, image: '/manus-storage/golden-chocolate-cake_7df42831.jpg' },
-    // Cookies
-    { id: 8, name: 'Chocolate Chip', category: 'cookies', description: 'Classic cookies with premium chocolate chips', price: 2.50, image: '/manus-storage/chocolate-cake_4df9a7a5.jpg' },
-    { id: 9, name: 'Macaron', category: 'cookies', description: 'Delicate French almond cookies', price: 2.99, image: '/manus-storage/caramel-cake_f84bcba5.jpg' },
-    { id: 10, name: 'Sugar Cookie', category: 'cookies', description: 'Soft, buttery sugar cookies', price: 2.25, image: '/manus-storage/golden-chocolate-cake_7df42831.jpg' },
-    // Cheesecakes
-    { id: 11, name: 'Classic Cheesecake', category: 'cheesecakes', description: 'Creamy New York style cheesecake', price: 5.99, image: '/manus-storage/chocolate-cake_4df9a7a5.jpg' },
-    { id: 12, name: 'Berry Cheesecake', category: 'cheesecakes', description: 'Cheesecake with fresh berry topping', price: 6.49, image: '/manus-storage/caramel-cake_f84bcba5.jpg' },
-    // Coffee
-    { id: 13, name: 'Espresso', category: 'coffee', description: 'Rich, bold espresso shot', price: 2.75, image: '/manus-storage/golden-chocolate-cake_7df42831.jpg' },
-    { id: 14, name: 'Cappuccino', category: 'coffee', description: 'Smooth espresso with steamed milk', price: 3.50, image: '/manus-storage/chocolate-cake_4df9a7a5.jpg' },
-    { id: 15, name: 'Latte', category: 'coffee', description: 'Creamy espresso and milk blend', price: 3.75, image: '/manus-storage/caramel-cake_f84bcba5.jpg' },
-  ];
+  useEffect(() => {
+    api.desserts.list().then(desserts => {
+      setMenuItems(desserts.map(toMenuItem));
+      setCategories(['all', ...Array.from(new Set(desserts.map(d => d.category)))]);
+    }).catch(() => toast.error('Failed to load menu'));
+  }, []);
 
   const filteredItems = selectedCategory === 'all'
     ? menuItems
@@ -45,19 +44,19 @@ export default function Menu() {
   return (
     <div className="w-full">
       {/* Header */}
-      <section className="py-16 bg-[#FBF7F4]">
+      <section className="py-16 bg-background">
         <div className="container text-center fade-in">
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#3D2817] mb-4">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
             Our Menu
           </h1>
-          <p className="font-sans text-sm sm:text-base md:text-lg text-[#5F3F1B]/80 max-w-2xl mx-auto px-4">
+          <p className="font-sans text-sm sm:text-base md:text-lg text-foreground/80 max-w-2xl mx-auto px-4">
             Discover our carefully curated selection of handcrafted desserts and premium coffee.
           </p>
         </div>
       </section>
 
       {/* Category Filter - Using CategoryDropdown */}
-      <section className="py-12 bg-white border-b border-[#E8D4D8]">
+      <section className="py-12 bg-white border-b border-border">
         <div className="container flex justify-center px-2">
           <CategoryDropdown
             categories={categories.map(cat => cat === 'all' ? 'All Items' : cat.charAt(0).toUpperCase() + cat.slice(1))}
@@ -71,42 +70,61 @@ export default function Menu() {
       </section>
 
       {/* Menu Items Grid */}
-      <section className="py-20 bg-[#FBF7F4]">
+      <section className="py-20 bg-background">
         <div className="container">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 px-2 md:px-0">
             {filteredItems.map((item, idx) => (
               <div
                 key={item.id}
-                className="fade-in-up rounded-xl border border-[#E8D4D8] bg-white hover:border-[#C9949B] hover:shadow-lg transition-all hover-lift overflow-hidden"
+                className="fade-in-up rounded-xl border border-border bg-white hover:border-primary hover:shadow-lg transition-all hover-lift overflow-hidden"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
                 {/* Image Container */}
-                <div className="relative h-48 bg-[#FBF7F4] overflow-hidden">
-                  <img 
-                    src={item.image} 
+                <div className="relative h-48 bg-background overflow-hidden">
+                  <img
+                    src={item.image}
                     alt={item.name}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
+                  {!item.availability && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-foreground/80 text-white text-[11px] font-semibold">
+                      Unavailable
+                    </span>
+                  )}
                 </div>
 
                 {/* Content */}
                 <div className="p-4 sm:p-6">
                   <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-serif text-lg sm:text-xl font-semibold text-[#3D2817] flex-1">
+                    <h3 className="font-serif text-lg sm:text-xl font-semibold text-foreground flex-1">
                       {item.name}
                     </h3>
-                    <span className="font-serif text-base sm:text-lg font-bold text-[#5F3F1B] ml-2 whitespace-nowrap text-sm">
+                    <span className="font-serif text-base sm:text-lg font-bold text-foreground ml-2 whitespace-nowrap text-sm">
                       ${item.price.toFixed(2)}
                     </span>
                   </div>
-                  <p className="font-sans text-sm sm:text-base text-[#5F3F1B]/70 mb-4">
+                  <p className="font-sans text-sm sm:text-base text-foreground/70 mb-3">
                     {item.description}
                   </p>
+                  {(item.preparationTime || item.allergens.length > 0) && (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {item.preparationTime && (
+                        <span className="px-2 py-0.5 rounded-full bg-muted text-foreground/70 text-[11px] font-sans">
+                          ⏱ {item.preparationTime}
+                        </span>
+                      )}
+                      {item.allergens.map((a, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-full bg-cta/10 text-foreground/70 text-[11px] font-sans">
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       onClick={() => navigate(`/product/${item.id}`)}
-                      className="flex-1 bg-white border-2 border-[#C9949B] text-[#C9949B] hover:bg-[#F0D4D8] font-sans font-semibold transition-all text-sm py-2"
+                      className="flex-1 bg-white border-2 border-primary text-primary hover:bg-muted font-sans font-semibold transition-all text-sm py-2"
                     >
                       Learn More
                     </Button>
@@ -115,9 +133,10 @@ export default function Menu() {
                         setSelectedItem(item);
                         setQuantitySelectorOpen(true);
                       }}
-                      className="flex-1 bg-[#C9949B] text-white hover:bg-[#C97A85] font-sans font-semibold transition-all text-sm py-2"
+                      disabled={!item.availability}
+                      className="flex-1 bg-primary text-white hover:bg-accent font-sans font-semibold transition-all text-sm py-2 disabled:opacity-50"
                     >
-                      Add to Cart
+                      {item.availability ? "Add to Cart" : "Unavailable"}
                     </Button>
                   </div>
                 </div>
@@ -128,22 +147,22 @@ export default function Menu() {
       </section>
 
       {/* Custom Orders Banner - Below Menu Items */}
-      <section className="py-12 bg-[#C9949B]/10 border-t border-[#E8D4D8]">
+      <section className="py-12 bg-primary/10 border-t border-border">
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 px-4 md:px-0">
             <div className="flex-1">
-              <h3 className="font-serif text-2xl md:text-3xl font-bold text-[#3D2817] mb-2">
+              <h3 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-2">
                 ✨ Don't Know What You're Looking For?
               </h3>
-              <p className="font-sans text-[#5F3F1B]/80">
+              <p className="font-sans text-foreground/80">
                 Design your own custom cake for any occasion! We'll bring your vision to life with our handcrafted expertise.
               </p>
             </div>
             <Button
               asChild
-              className="bg-[#C9949B] hover:bg-[#C97A85] text-white font-sans font-semibold px-8 py-3 rounded-lg hover-lift transition-all whitespace-nowrap border-2 border-[#C9949B]"
+              className="bg-primary hover:bg-accent text-white font-sans font-semibold px-8 py-3 rounded-lg hover-lift transition-all whitespace-nowrap border-2 border-primary"
             >
-              <a href="/custom-cakes">Order Custom Cake</a>
+              <Link href="/custom-cakes">Order Custom Cake</Link>
             </Button>
           </div>
         </div>

@@ -40,6 +40,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
+  --color-cta-foreground: var(--cta-foreground);
 }
 
 :root {
@@ -76,6 +79,11 @@
   --sidebar-accent-foreground: #2C1810;
   --sidebar-border: #E8D4D8;
   --sidebar-ring: #C9949B;
+  /* Fixed "add to cart" sage-green tone, distinct from the personalizable
+     primary/accent brand colors set via the dashboard's CMS. */
+  --cta: #A8C9B8;
+  --cta-hover: #96B8A6;
+  --cta-foreground: #FFFFFF;
 }
 
 .dark {

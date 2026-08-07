@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import {
   LayoutDashboard, DollarSign, ShoppingBag, Users, Package, AlertTriangle,
   ListTodo, TrendingUp, ArrowUpRight, Cake, Eye, MousePointerClick, Zap
@@ -54,10 +54,10 @@ export default function Home() {
     (async () => {
       try {
         const [o, c, i, d] = await Promise.all([
-          base44.entities.Order.list("-created_date", 200),
-          base44.entities.Customer.list("-created_date", 200),
-          base44.entities.InventoryItem.list("-created_date", 200),
-          base44.entities.Dessert.list("-display_order", 200),
+          entities.Order.list("-created_date", 200),
+          entities.Customer.list("-created_date", 200),
+          entities.InventoryItem.list("-created_date", 200),
+          entities.Dessert.list("-display_order", 200),
         ]);
         setOrders(o); setCustomers(c); setInventory(i); setDesserts(d);
       } catch (e) { console.error(e); }
@@ -217,7 +217,7 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-medium truncate">{o.customer_name}</div>
-                    <div className="text-[11.5px] text-muted-foreground">{o.order_number || `#${o.id.slice(-6)}`}</div>
+                    <div className="text-[11.5px] text-muted-foreground">{o.order_number || `#${String(o.id).slice(-6)}`}</div>
                   </div>
                   <span className="text-[13px] font-semibold tabular-nums">${(o.total_value || 0).toFixed(0)}</span>
                   <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">{o.status}</span>

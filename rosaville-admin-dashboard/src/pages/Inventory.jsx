@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
@@ -27,9 +27,9 @@ export default function Inventory() {
     setLoading(true);
     try {
       const [i, o, d] = await Promise.all([
-        base44.entities.InventoryItem.list("-created_date", 500),
-        base44.entities.Order.list("-created_date", 500),
-        base44.entities.Dessert.list("-display_order", 500),
+        entities.InventoryItem.list("-created_date", 500),
+        entities.Order.list("-created_date", 500),
+        entities.Dessert.list("-display_order", 500),
       ]);
       setItems(i); setOrders(o); setDesserts(d);
     } catch (e) { console.error(e); }
@@ -53,13 +53,13 @@ export default function Inventory() {
 
   const remove = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return;
-    await base44.entities.InventoryItem.delete(item.id);
+    await entities.InventoryItem.delete(item.id);
     setItems((p) => p.filter((x) => x.id !== item.id));
   };
 
   const adjustStock = async (item, delta) => {
     const newStock = Math.max(0, (item.current_stock || 0) + delta);
-    await base44.entities.InventoryItem.update(item.id, { current_stock: newStock });
+    await entities.InventoryItem.update(item.id, { current_stock: newStock });
     setItems((p) => p.map((x) => (x.id === item.id ? { ...x, current_stock: newStock } : x)));
   };
 
@@ -190,8 +190,8 @@ function ItemDialog({ open, item, onClose, onSaved }) {
     setSaving(true);
     try {
       const payload = { ...form, current_stock: Number(form.current_stock) || 0, minimum_stock: Number(form.minimum_stock) || 0, cost_per_unit: Number(form.cost_per_unit) || 0 };
-      if (isEdit) await base44.entities.InventoryItem.update(item.id, payload);
-      else await base44.entities.InventoryItem.create(payload);
+      if (isEdit) await entities.InventoryItem.update(item.id, payload);
+      else await entities.InventoryItem.create(payload);
       onSaved(); onClose();
     } catch (e) { console.error(e); }
     setSaving(false);

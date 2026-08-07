@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities, uploadFile } from '@/lib/api';
 import { Cake, Plus, Search, Pencil, Trash2, Star, Copy, Upload, X, Link2 } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,10 @@ import IngredientRow from "@/components/admin/IngredientRow";
 
 const CATEGORIES = ["Signature Cakes", "Custom Cakes", "Seasonal Specials", "Cupcakes", "Pastries", "Cheesecakes"];
 const SAMPLE_IMAGES = [
-  "https://rosaviledess-3jk43i4r.manus.space/manus-storage/strawberry-cake-hero_4494ac95.jpg",
-  "https://rosaviledess-3jk43i4r.manus.space/manus-storage/caramel-cake_f84bcba5.jpg",
-  "https://rosaviledess-3jk43i4r.manus.space/manus-storage/golden-chocolate-cake_7df42831.jpg",
-  "https://rosaviledess-3jk43i4r.manus.space/manus-storage/chocolate-cake_4df9a7a5.jpg",
+  "/placeholder-dessert.svg",
+  "/placeholder-dessert.svg",
+  "/placeholder-dessert.svg",
+  "/placeholder-dessert.svg",
 ];
 
 export default function Desserts() {
@@ -33,8 +33,8 @@ export default function Desserts() {
     setLoading(true);
     try {
       const [d, i] = await Promise.all([
-        base44.entities.Dessert.list("-display_order", 500),
-        base44.entities.InventoryItem.list("-created_date", 500),
+        entities.Dessert.list("-display_order", 500),
+        entities.InventoryItem.list("-created_date", 500),
       ]);
       setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
@@ -50,18 +50,18 @@ export default function Desserts() {
 
   const remove = async (d) => {
     if (!confirm(`Delete "${d.name}"?`)) return;
-    await base44.entities.Dessert.delete(d.id);
+    await entities.Dessert.delete(d.id);
     setDesserts((p) => p.filter((x) => x.id !== d.id));
   };
 
   const duplicate = async (d) => {
     const { id, created_date, updated_date, created_by_id, ...rest } = d;
-    await base44.entities.Dessert.create({ ...rest, name: `${d.name} (Copy)`, display_order: (d.display_order || 0) + 1 });
+    await entities.Dessert.create({ ...rest, name: `${d.name} (Copy)`, display_order: (d.display_order || 0) + 1 });
     load();
   };
 
   const toggleFeatured = async (d) => {
-    await base44.entities.Dessert.update(d.id, { featured: !d.featured });
+    await entities.Dessert.update(d.id, { featured: !d.featured });
     setDesserts((p) => p.map((x) => (x.id === d.id ? { ...x, featured: !x.featured } : x)));
   };
 
@@ -169,7 +169,7 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file);
       set("featured_image", file_url);
     } catch (err) { console.error(err); }
     setUploading(false);
@@ -180,8 +180,8 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
     try {
       const payload = { ...form, price: Number(form.price) || 0 };
       if (!payload.featured_image && payload.images?.length) payload.featured_image = payload.images[0];
-      if (isEdit) await base44.entities.Dessert.update(item.id, payload);
-      else await base44.entities.Dessert.create(payload);
+      if (isEdit) await entities.Dessert.update(item.id, payload);
+      else await entities.Dessert.create(payload);
       onSaved(); onClose();
     } catch (e) { console.error(e); }
     setSaving(false);

@@ -1,41 +1,36 @@
 # Rosaville bakery ecosystem
 
-`rosaville-front-last/` (public site) and `rosaville-admin-dashboard/` (shop owner dashboard) are two halves of the same product: the shop owner manages the business from the dashboard, and customers should see the results of that on the live site. Two long-term goals apply across both apps and should shape any cross-cutting or architectural work.
+`rosaville-front-last/` (public site) and `rosaville-admin-dashboard/` (shop owner dashboard) are two halves of the same product, both served by `rosaville-backend/` (a shared Django + Django REST Framework API + PostgreSQL database). The shop owner manages the business from the dashboard; customers see the results on the live site. Three goals apply, in sequence.
 
-## Current priority: get the apps working together locally, then publish
+## Goal 1: platform independence — DONE (locally)
 
-The immediate next step is **Goal 1 (connecting the two apps) verified locally** — not just each app functioning in isolation, but the dashboard and public site actually working together end to end on a local setup (e.g. a change made in the dashboard shows up on the site). Only once that's working locally does publishing/deploying come next. Goal 2 (platform independence) is a separate, longer-term effort — don't let it block getting the two apps working together first.
+Both apps have been migrated off Base44 and Manus onto a self-hosted stack:
 
-## Goal 1: connect the two apps
+- **`rosaville-backend/`** (new) — Django project with four apps: `accounts` (custom email-login `User` model with `role` = admin/manager/employee, JWT auth via `djangorestframework-simplejwt`, role-based permission classes in `accounts/permissions.py`), `catalog` (`Dessert` model — see Goal 2 note below — plus the local-disk upload endpoint at `/api/upload/`), `operations` (`Customer`, `Order`, `InventoryItem`, `Task`, `Feedback`), `storefront` (`ContactRequest`, `CustomCakeOrder`, `TeamMember`). All REST endpoints live under `/api/`, permissioned to mirror the RLS rules the old Base44 entities used to enforce (see `accounts/permissions.py` for the exact role/ownership logic). Local dev: PostgreSQL via Homebrew (`brew services start postgresql@16`), venv at `rosaville-backend/.venv`, `python manage.py runserver`.
+- **`rosaville-admin-dashboard/`** — no more `@base44/sdk`; talks to the Django API via `src/lib/api.js` (a plain fetch wrapper with JWT bearer auth + auto-refresh). `AuthContext.jsx` now does real email/password login against `/api/auth/*`. Auth is intentionally minimal — no Google OAuth, no self-registration/OTP; new staff accounts are created from the Employees page (admin-only), which returns a generated temp password to hand off manually (no email delivery is configured).
+- **`rosaville-front-last/`** — `server/`, `drizzle/`, and `shared/` are gone entirely; it's now a pure Vite-built SPA like the dashboard, calling the same Django API via `client/src/lib/api.ts`. Its Manus-specific code (OAuth stack, LLM/image-gen/voice/maps/data-api integrations, the debug-collector Vite plugin) is deleted — none of it had a live caller. The one thing that was actually load-bearing, the `/manus-storage` image proxy, is replaced: dessert/menu images now come from the `Dessert` model's `featured_image` (served from Django's local `MEDIA_ROOT`), and pages that still show hardcoded product mockups (Gallery, ProductDetail, SpecialDessert, About) use a local `/placeholder-dessert.svg` instead of external Manus-hosted URLs.
 
-Today they are **fully disconnected** — different backends, different platforms, different data models for the same concepts:
+Verified locally end-to-end: JWT login, role-gated CRUD (admin/manager/employee + `Task` assignee-ownership), public form submissions (contact, custom cake orders), CORS between both Vite dev origins and the Django API, and no remaining `base44`/`manus` references in either app's source (one harmless exception: a vendored `media.base44.com` hostname check in `admin-dashboard/src/components/ui/image.jsx` that's never triggered by our own data).
 
-| Concept | Dashboard (Base44) | Public site (Drizzle/MySQL) |
+## Goal 2: connect the two apps
+
+Sharing one Django backend already closes part of this gap — `Dessert` is a **single model** in `catalog/models.py` (unifying the old Base44 `Dessert` entity and front-last's old `menuItems` table) that the dashboard manages and the public site's `Menu`/`MenuItem` pages read from live via `GET /api/desserts/`. Likewise `ContactRequest` unifies the old `ContactRequest` entity and `contactMessages` table.
+
+Still separate, not yet reconciled:
+
+| Concept | Dashboard-side | Public-site-side |
 | --- | --- | --- |
-| Menu items | `Dessert` entity — `rosaville-admin-dashboard/base44/entities/Dessert.jsonc` | `menuItems` table — `rosaville-front-last/drizzle/schema.ts` |
-| Orders | `Order` entity | `customCakeOrders` table (custom-cake requests only; no general order flow on the site) |
-| Customers | `Customer` entity | no equivalent table |
-| Contact | `ContactRequest` entity | `contactMessages` table |
-| Team | `Employee`-related data (dashboard-only) | `teamMembers` table |
+| Orders | `operations.Order` (general sales/production orders, staff-managed) | `storefront.CustomCakeOrder` (custom-cake request form only) — no general checkout/order flow exists on the site; Cart/Checkout are still pure client-side state with no backend persistence |
+| Customers | `operations.Customer` (CRM-style, staff-managed) | no equivalent — the site has no customer accounts |
+| Team | dashboard manages staff via `accounts.User` (system accounts/roles) | `storefront.TeamMember` (public bios, unrelated to system accounts) |
 
-A change the shop owner makes in the dashboard (e.g. editing a `Dessert`) does **not** propagate to the live site's `menuItems`, and vice versa. There is no shared database, API, or sync mechanism between them. Any integration work needs to reconcile this — either by having one app become the source of truth the other reads from, or by introducing a shared backend/data layer. No approach has been decided yet; don't assume one when making changes.
+Whether/how to reconcile Orders and Customers with a real site checkout flow is undecided — that's a bigger feature (building order persistence for the storefront) than a data-model rename, and hasn't been scoped yet.
 
-## Goal 2: platform independence
+## Goal 3: publish
 
-Both apps should eventually run without their current hosted-platform dependencies.
-
-**Dashboard is coupled to Base44:**
-- `@base44/sdk` and `@base44/vite-plugin` (`rosaville-admin-dashboard/package.json`)
-- `src/api/base44Client.js` — the SDK client instance
-- `src/lib/AuthContext.jsx` — auth built directly on Base44's low-level client, not a generic auth library
-- `src/lib/app-params.js` — resolves app id/token/base URL from the Base44-hosted app
-- `base44/entities/*.jsonc` — entity schemas and row-level-security rules are defined and enforced by Base44, not by app code
-- Pages call `base44.entities.<Entity>.*` directly with no data-access abstraction layer to swap out
-
-**Front-last is coupled to Manus:**
-- `server/_core/sdk.ts`, `oauth.ts` — Manus-platform OAuth (not a third-party auth library)
-- `server/_core/llm.ts`, `imageGeneration.ts`, `voiceTranscription.ts`, `map.ts`, `dataApi.ts`, `storageProxy.ts` — Manus-hosted integrations, each documented in a matching `references/*.md` file
-- `vite.config.ts` — `vitePluginManusRuntime()` and the manus-debug-collector dev plugin
-- Dev server host allowlist for `.manus.computer` / `.manuspre.computer` domains
-
-Migrating either app off its platform is a substantial undertaking, not a drop-in swap — the entity/RLS model (Base44) and the OAuth/integration helpers (Manus) are load-bearing, not incidental. Treat this as a real architectural constraint when planning related work, not something to casually work around.
+- Public site (`rosaville-front-last`) gets a proper custom domain.
+- Admin dashboard (`rosaville-admin-dashboard`) stays on Vercel's free tier — low-traffic internal tool, no custom domain needed. Both are static Vite builds, which Vercel serves natively.
+- `rosaville-backend` (Django + Postgres) does **not** fit Vercel's model — it needs a real host for a stateful DB-backed app (e.g. Railway, Render, Fly.io, or a VPS). Not decided yet.
+- All API calls must be HTTPS in any non-local environment (`CORS_ALLOWED_ORIGINS`/`CSRF_TRUSTED_ORIGINS` in `rosaville-backend/config/settings.py` are env-driven for this reason). Local dev stays on plain HTTP.
+- The Postgres database was deliberately kept "plain" (no Postgres-only ORM features beyond `JSONField`) so it can be pointed at Supabase or another managed Postgres host later via `DATABASE_URL`, with no code changes.
+- Longer-term, explicitly requested direction: the two frontends' tech stacks should drift closer together over time (React version, build tooling, UI kit) rather than staying independently divergent — not started yet.

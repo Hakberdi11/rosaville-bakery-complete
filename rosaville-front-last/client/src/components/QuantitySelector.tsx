@@ -44,12 +44,12 @@ export default function QuantitySelector({
       <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h2 className="font-serif text-2xl font-bold text-[#3D2817]">
+          <h2 className="font-serif text-2xl font-bold text-foreground">
             How many?
           </h2>
           <button
             onClick={onClose}
-            className="text-[#5F3F1B]/60 hover:text-[#5F3F1B] transition-colors"
+            className="text-foreground/60 hover:text-foreground transition-colors"
             aria-label="Close"
           >
             <X size={24} />
@@ -57,26 +57,26 @@ export default function QuantitySelector({
         </div>
 
         {/* Product Name */}
-        <p className="font-sans text-sm text-[#5F3F1B]/70 mb-6">
+        <p className="font-sans text-sm text-foreground/70 mb-6">
           {productName}
         </p>
 
         {/* Quantity Selector */}
-        <div className="flex items-center justify-center gap-6 mb-8 bg-[#FBF7F4] p-6 rounded-xl">
+        <div className="flex items-center justify-center gap-6 mb-8 bg-background p-6 rounded-xl">
           <button
             onClick={handleDecrease}
             disabled={quantity <= 1}
-            className="bg-[#C9949B] hover:bg-[#C97A85] disabled:bg-[#C9949B]/50 text-white p-3 rounded-full transition-all disabled:cursor-not-allowed"
+            className="bg-primary hover:bg-accent disabled:bg-primary/50 text-white p-3 rounded-full transition-all disabled:cursor-not-allowed"
             aria-label="Decrease quantity"
           >
             <Minus size={20} />
           </button>
 
           <div className="text-center">
-            <p className="font-serif text-4xl font-bold text-[#3D2817]">
+            <p className="font-serif text-4xl font-bold text-foreground">
               {quantity}
             </p>
-            <p className="font-sans text-xs text-[#5F3F1B]/60 mt-1">
+            <p className="font-sans text-xs text-foreground/60 mt-1">
               {quantity === 1 ? "item" : "items"}
             </p>
           </div>
@@ -84,7 +84,7 @@ export default function QuantitySelector({
           <button
             onClick={handleIncrease}
             disabled={quantity >= maxQuantity}
-            className="bg-[#C9949B] hover:bg-[#C97A85] disabled:bg-[#C9949B]/50 text-white p-3 rounded-full transition-all disabled:cursor-not-allowed"
+            className="bg-primary hover:bg-accent disabled:bg-primary/50 text-white p-3 rounded-full transition-all disabled:cursor-not-allowed"
             aria-label="Increase quantity"
           >
             <Plus size={20} />
@@ -96,13 +96,13 @@ export default function QuantitySelector({
           <Button
             onClick={onClose}
             variant="outline"
-            className="flex-1 border-[#C9949B] text-[#C9949B] hover:bg-[#FBF7F4]"
+            className="flex-1 border-primary text-primary hover:bg-background"
           >
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
-            className="flex-1 bg-[#C9949B] hover:bg-[#C97A85] text-white"
+            className="flex-1 bg-primary hover:bg-accent text-white"
           >
             Add to Cart
           </Button>

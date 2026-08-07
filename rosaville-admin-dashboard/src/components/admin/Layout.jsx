@@ -6,10 +6,12 @@ import {
   LayoutDashboard, ShoppingBag, Users, Cake, Image, FileText, Inbox,
   Package, Factory, ChefHat, Megaphone, UserCog, ListTodo,
   Bell, FileBarChart, Settings, ScrollText, TrendingUp, Moon, Sun,
-  Menu, Search, LogOut
+  Menu, Search, LogOut, Sparkles, Users2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { entities } from "@/lib/api";
+import { StatusBadge } from "@/components/admin/PageHeader";
 
 // Roles: admin (full), manager (operations), employee (tasks + production only)
 const navGroups = [
@@ -34,6 +36,7 @@ const navGroups = [
     items: [
       { label: "Desserts", path: "/desserts", icon: Cake, roles: ["admin", "manager", "employee"] },
       { label: "Gallery", path: "/gallery", icon: Image, roles: ["admin", "manager"] },
+      { label: "Special of the Month", path: "/special-of-month", icon: Sparkles, roles: ["admin", "manager"] },
     ],
   },
   {
@@ -56,6 +59,7 @@ const navGroups = [
     items: [
       { label: "Marketing", path: "/marketing", icon: Megaphone, roles: ["admin", "manager"] },
       { label: "Website CMS", path: "/cms", icon: FileText, roles: ["admin", "manager"] },
+      { label: "Team Page", path: "/team", icon: Users2, roles: ["admin", "manager"] },
     ],
   },
   {
@@ -86,6 +90,49 @@ function useDarkMode() {
     localStorage.setItem("rv-theme", dark ? "dark" : "light");
   }, [dark]);
   return { dark, toggle: () => setDark((d) => !d) };
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function RecentOrderWidget() {
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    entities.Order.list("-created_date", 1)
+      .then((orders) => { if (!cancelled) setOrder(orders[0] || null); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading || !order) return null;
+
+  return (
+    <NavLink
+      to="/orders"
+      className="block rounded-xl border border-border/60 bg-card p-3.5 hover:border-primary/40 transition-colors"
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">Most Recent Order</span>
+        <StatusBadge status={order.status} />
+      </div>
+      <div className="text-[13px] font-semibold truncate">{order.customer_name || "Unnamed customer"}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">
+        ${Number(order.total_value || 0).toFixed(2)} · {timeAgo(order.created_at)}
+      </div>
+    </NavLink>
+  );
 }
 
 function SidebarContent({ role, onNavigate }) {
@@ -135,13 +182,7 @@ function SidebarContent({ role, onNavigate }) {
         ))}
       </nav>
       <div className="border-t border-border/60 p-4">
-        <div className="rounded-xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 p-3.5">
-          <div className="text-[12px] font-semibold mb-0.5">Enterprise Plan</div>
-          <div className="text-[11px] text-muted-foreground leading-relaxed mb-2.5">All modules active · Multi-store ready</div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full w-[68%] bg-gradient-to-r from-rose-500 to-amber-500" />
-          </div>
-        </div>
+        <RecentOrderWidget />
       </div>
     </div>
   );
@@ -158,7 +199,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
-      <aside className="hidden lg:flex w-[252px] shrink-0 flex-col border-r border-border/60 bg-sidebar">
+      <aside className="hidden lg:flex w-[252px] shrink-0 flex-col border-r border-border/60 bg-sidebar sticky top-0 h-screen">
         <SidebarContent role={role} />
       </aside>
 

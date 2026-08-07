@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { trpc } from '@/lib/trpc';
+import { api } from '@/lib/api';
+import { useSiteContent } from '@/contexts/SiteContentContext';
 import { toast } from 'sonner';
 import { MapPin, Phone, Mail, Clock } from 'lucide-react';
 
 export default function Contact() {
+  const { content } = useSiteContent();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,24 +17,6 @@ export default function Contact() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitMessage = trpc.contact.submitMessage.useMutation({
-    onSuccess: () => {
-      toast.success('Your message has been sent! We\'ll get back to you soon.');
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        subject: '',
-        message: '',
-      });
-      setIsSubmitting(false);
-    },
-    onError: () => {
-      toast.error('Failed to send message. Please try again.');
-      setIsSubmitting(false);
-    },
-  });
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -41,7 +25,15 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    await submitMessage.mutateAsync(formData);
+    try {
+      await api.contact.submit(formData);
+      toast.success('Your message has been sent! We\'ll get back to you soon.');
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    } catch {
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -67,17 +59,17 @@ export default function Contact() {
               {
                 icon: MapPin,
                 title: 'Location',
-                content: '123 Sweet Street\nDessert City, DC 12345',
+                content: content?.contact_address || '123 Sweet Street\nDessert City, DC 12345',
               },
               {
                 icon: Phone,
                 title: 'Phone',
-                content: '(555) 123-4567\nCall us anytime',
+                content: (content?.contact_phone || '(555) 123-4567') + '\nCall us anytime',
               },
               {
                 icon: Mail,
                 title: 'Email',
-                content: 'hello@rosaville.com\nWe respond within 24 hours',
+                content: (content?.contact_email || 'hello@rosaville.com') + '\nWe respond within 24 hours',
               },
             ].map((item, idx) => {
               const Icon = item.icon;
@@ -108,12 +100,15 @@ export default function Contact() {
               </h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                { day: 'Monday - Friday', hours: '9:00 AM - 7:00 PM' },
-                { day: 'Saturday', hours: '10:00 AM - 8:00 PM' },
-                { day: 'Sunday', hours: '11:00 AM - 6:00 PM' },
-                { day: 'Holidays', hours: 'Call for hours' },
-              ].map((item, idx) => (
+              {(content?.business_hours && content.business_hours.length > 0
+                ? content.business_hours
+                : [
+                    { day: 'Monday - Friday', hours: '9:00 AM - 7:00 PM' },
+                    { day: 'Saturday', hours: '10:00 AM - 8:00 PM' },
+                    { day: 'Sunday', hours: '11:00 AM - 6:00 PM' },
+                    { day: 'Holidays', hours: 'Call for hours' },
+                  ]
+              ).map((item, idx) => (
                 <div key={idx} className="flex justify-between">
                   <span className="font-sans font-semibold text-foreground">
                     {item.day}

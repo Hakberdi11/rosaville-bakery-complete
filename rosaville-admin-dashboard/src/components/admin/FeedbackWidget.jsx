@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { Star, MessageSquareQuote } from "lucide-react";
 import { EmptyState } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ export default function FeedbackWidget() {
 
   useEffect(() => {
     (async () => {
-      try { setFeedback(await base44.entities.Feedback.list("-created_date", 50)); }
+      try { setFeedback(await entities.Feedback.list("-created_date", 50)); }
       catch (e) { console.error(e); }
       setLoading(false);
     })();

@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { SiteContentProvider } from "./contexts/SiteContentContext";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Menu from "./pages/Menu";
@@ -63,17 +64,19 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <CartProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </CartProvider>
-      </ThemeProvider>
+      <SiteContentProvider>
+        <ThemeProvider
+          defaultTheme="light"
+          // switchable
+        >
+          <CartProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </CartProvider>
+        </ThemeProvider>
+      </SiteContentProvider>
     </ErrorBoundary>
   );
 }

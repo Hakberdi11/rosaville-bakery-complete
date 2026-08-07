@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from '@/lib/api';
 import { useAuth } from "@/lib/AuthContext";
 import { UserCog, Plus, Mail, Shield, Trash2, UserPlus, CheckCircle2 } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
@@ -31,20 +31,20 @@ export default function Employees() {
 
   const load = async () => {
     setLoading(true);
-    try { setUsers(await base44.entities.User.list("-created_date", 500)); }
+    try { setUsers(await entities.User.list("-created_date", 500)); }
     catch (e) { console.error(e); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
   const changeRole = async (id, role) => {
-    try { await base44.entities.User.update(id, { role }); load(); }
+    try { await entities.User.update(id, { role }); load(); }
     catch (e) { console.error(e); alert("Could not update role."); }
   };
 
   const removeUser = async (u) => {
     if (!confirm(`Remove ${u.email}?`)) return;
-    try { await base44.entities.User.delete(u.id); load(); }
+    try { await entities.User.delete(u.id); load(); }
     catch (e) { console.error(e); alert("Could not remove user."); }
   };
 
@@ -162,28 +162,22 @@ function InviteDialog({ open, onClose, onInvited }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [tempPassword, setTempPassword] = useState("");
 
-  const reset = () => { setEmail(""); setRole("employee"); setError(""); setDone(false); setSaving(false); };
+  const reset = () => { setEmail(""); setRole("employee"); setError(""); setDone(false); setSaving(false); setTempPassword(""); };
   const handleClose = () => { onClose(); setTimeout(reset, 250); };
 
   const submit = async () => {
     setError("");
     setSaving(true);
     try {
-      // Invite as "user" (platform role), then set the chosen display role.
-      await base44.users.inviteUser(email, "user");
-      // Best-effort role update after invite (the user record may not exist instantly)
-      try {
-        const all = await base44.entities.User.list("-created_date", 500);
-        const u = all.find((x) => x.email === email);
-        if (u && role !== "user") await base44.entities.User.update(u.id, { role });
-      } catch (e) { console.error(e); }
+      const created = await entities.User.create({ email, role });
+      setTempPassword(created.temp_password);
       setDone(true);
       onInvited();
-      setTimeout(handleClose, 1800);
     } catch (e) {
       console.error(e);
-      setError(e?.message || "Could not send invitation. Make sure your account is an admin and the email is valid.");
+      setError(e?.message || "Could not create account. Make sure your account is an admin and the email is valid.");
     }
     setSaving(false);
   };
@@ -191,14 +185,21 @@ function InviteDialog({ open, onClose, onInvited }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Invite Team Member</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add Team Member</DialogTitle></DialogHeader>
         {done ? (
           <div className="py-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mb-3">
               <CheckCircle2 className="w-7 h-7 text-emerald-500" />
             </div>
-            <h3 className="font-heading font-semibold text-[15px]">Invitation sent</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 max-w-[280px]">{email} will receive an email with a link to join the team.</p>
+            <h3 className="font-heading font-semibold text-[15px]">Account created</h3>
+            <p className="text-[13px] text-muted-foreground mt-1 max-w-[280px]">
+              Share these temporary sign-in details with {email} — there's no automated invite email yet.
+            </p>
+            <div className="mt-4 w-full p-3 rounded-lg bg-muted text-left text-[13px] font-mono">
+              <div>{email}</div>
+              <div>{tempPassword}</div>
+            </div>
+            <Button className="mt-4" variant="outline" onClick={handleClose}>Done</Button>
           </div>
         ) : (
           <>
@@ -212,11 +213,11 @@ function InviteDialog({ open, onClose, onInvited }) {
               </select>
             </div>
             {error && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-[12.5px]">{error}</div>}
-            <p className="text-[11.5px] text-muted-foreground flex items-start gap-1.5"><Mail className="w-3.5 h-3.5 mt-0.5 shrink-0" /> An invitation email will be sent. The user will appear here once they accept.</p>
+            <p className="text-[11.5px] text-muted-foreground flex items-start gap-1.5"><Mail className="w-3.5 h-3.5 mt-0.5 shrink-0" /> A temporary password will be generated for you to share with them directly.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button onClick={submit} disabled={saving || !email} className="bg-rose-600 hover:bg-rose-700">{saving ? "Sending…" : "Send Invite"}</Button>
+            <Button onClick={submit} disabled={saving || !email} className="bg-rose-600 hover:bg-rose-700">{saving ? "Creating…" : "Create Account"}</Button>
           </DialogFooter>
           </>
         )}
