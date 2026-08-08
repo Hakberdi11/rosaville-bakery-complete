@@ -118,7 +118,7 @@ export default function Employees() {
                         {u.id === currentUser?.id && <span className="text-[10px] text-muted-foreground">(you)</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{u.created_date ? new Date(u.created_date).toLocaleDateString() : "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{u.date_joined ? new Date(u.date_joined).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">
                         <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)} disabled={u.id === currentUser?.id}

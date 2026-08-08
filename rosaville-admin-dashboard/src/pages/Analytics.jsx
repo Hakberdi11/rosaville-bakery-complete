@@ -32,7 +32,7 @@ export default function Analytics() {
   const revenueByMonth = useMemo(() => {
     const map = {};
     orders.forEach((o) => {
-      const d = o.delivery_date ? new Date(o.delivery_date) : new Date(o.created_date);
+      const d = o.delivery_date ? new Date(o.delivery_date) : new Date(o.created_at);
       if (!d) return;
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       map[key] = (map[key] || 0) + (o.total_value || 0);
