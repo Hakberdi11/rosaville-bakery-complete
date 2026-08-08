@@ -1,47 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import usePolling from "@/hooks/use-polling";
 import { entities } from '@/lib/api';
 import {
   LayoutDashboard, DollarSign, ShoppingBag, Users, Package, AlertTriangle,
-  ListTodo, TrendingUp, ArrowUpRight, Cake, Eye, MousePointerClick, Zap
+  ListTodo, ArrowUpRight
 } from "lucide-react";
 import StatCard from "@/components/admin/StatCard";
 import FeedbackWidget from "@/components/admin/FeedbackWidget";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, PieChart, Pie, Cell, Legend
+  CartesianGrid
 } from "recharts";
 
-const revenueData = [
-  { m: "Feb", revenue: 8200, orders: 42 },
-  { m: "Mar", revenue: 9100, orders: 48 },
-  { m: "Apr", revenue: 10400, orders: 53 },
-  { m: "May", revenue: 9800, orders: 51 },
-  { m: "Jun", revenue: 12600, orders: 61 },
-  { m: "Jul", revenue: 14200, orders: 68 },
-  { m: "Aug", revenue: 13100, orders: 64 },
-];
-
-const trafficData = [
-  { source: "Instagram", value: 38, color: "#ec4899" },
-  { source: "Google", value: 27, color: "#3b82f6" },
-  { source: "Direct", value: 18, color: "#10b981" },
-  { source: "Facebook", value: 11, color: "#6366f1" },
-  { source: "TikTok", value: 6, color: "#f59e0b" },
-];
-
-const aiInsights = [
-  { icon: TrendingUp, tone: "emerald", title: "Lavender Dream Cake is trending", body: "Sales up 42% this month — consider featuring it on the homepage hero." },
-  { icon: AlertTriangle, tone: "amber", title: "Inventory risk: Belgian chocolate", body: "Stock at 18% of capacity with 3 large custom orders scheduled this week." },
-  { icon: Users, tone: "blue", title: "Retention opportunity", body: "14 VIP customers haven't ordered in 45+ days. A re-engagement email could recover ~$3,400." },
-  { icon: Zap, tone: "violet", title: "Marketing opportunity", body: "Instagram traffic converts 2.3× higher than other channels — boost ad spend there." },
-];
-
-const toneMap = {
-  emerald: "from-emerald-500/10 to-emerald-500/5 text-emerald-600 dark:text-emerald-400",
-  amber: "from-amber-500/10 to-amber-500/5 text-amber-600 dark:text-amber-400",
-  blue: "from-blue-500/10 to-blue-500/5 text-blue-600 dark:text-blue-400",
-  violet: "from-violet-500/10 to-violet-500/5 text-violet-600 dark:text-violet-400",
+const PERIODS = {
+  "Last 30 days": 30,
+  "This week": 7,
+  "This month": 30,
+  "This year": 365,
 };
 
 export default function Home() {
@@ -50,17 +25,20 @@ export default function Home() {
   const [customers, setCustomers] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [desserts, setDesserts] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [period, setPeriod] = useState("Last 30 days");
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [o, c, i, d] = await Promise.all([
-        entities.Order.list("-created_date", 200),
+      const [o, c, i, d, t] = await Promise.all([
+        entities.Order.list("-created_date", 500),
         entities.Customer.list("-created_date", 200),
         entities.InventoryItem.list("-created_date", 200),
         entities.Dessert.list("-display_order", 200),
+        entities.Task.list("-created_date", 200),
       ]);
-      setOrders(o); setCustomers(c); setInventory(i); setDesserts(d);
+      setOrders(o); setCustomers(c); setInventory(i); setDesserts(d); setTasks(t);
     } catch (e) { console.error(e); }
     if (!silent) setLoading(false);
   };
@@ -68,13 +46,51 @@ export default function Home() {
   // Keep dashboard stats/recent orders fresh without a manual page refresh.
   usePolling(() => load(true), 15000);
 
-  const revenueTotal = orders.reduce((s, o) => s + (o.total_value || 0), 0);
-  const pendingOrders = orders.filter((o) => ["Pending", "Confirmed", "In Production"].includes(o.status)).length;
-  const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Delivered").length;
+  const periodOrders = useMemo(() => {
+    const days = PERIODS[period];
+    const cutoff = Date.now() - days * 86400000;
+    return orders.filter((o) => o.created_at && new Date(o.created_at).getTime() >= cutoff);
+  }, [orders, period]);
+
+  const revenueTotal = periodOrders.reduce((s, o) => s + (o.total_value || 0), 0);
+  const pendingOrders = periodOrders.filter((o) => ["Pending", "Confirmed", "In Production"].includes(o.status)).length;
+  const completedOrders = periodOrders.filter((o) => o.status === "Completed" || o.status === "Delivered").length;
   const vipCustomers = customers.filter((c) => c.segment === "VIP").length;
   const lowStock = inventory.filter((i) => i.current_stock <= i.minimum_stock);
   const inventoryValue = inventory.reduce((s, i) => s + (i.current_stock || 0) * (i.cost_per_unit || 0), 0);
   const recentOrders = orders.slice(0, 6);
+
+  // Real revenue/order trend for the last 6 months, derived from actual order dates.
+  const revenueData = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    for (let idx = 5; idx >= 0; idx--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - idx, 1);
+      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, m: d.toLocaleString(undefined, { month: "short" }), revenue: 0, orders: 0 });
+    }
+    const byKey = Object.fromEntries(months.map((m) => [m.key, m]));
+    orders.forEach((o) => {
+      if (!o.created_at) return;
+      const d = new Date(o.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const bucket = byKey[key];
+      if (bucket) { bucket.revenue += o.total_value || 0; bucket.orders += 1; }
+    });
+    return months;
+  }, [orders]);
+
+  // Real task-completion rate per assignee, replaces the old fake "Team Performance" chart.
+  const teamPerformance = useMemo(() => {
+    const byAssignee = {};
+    tasks.forEach((t) => {
+      const name = t.assigned_to_name;
+      if (!name) return;
+      if (!byAssignee[name]) byAssignee[name] = { name, total: 0, completed: 0 };
+      byAssignee[name].total += 1;
+      if (t.status === "Completed") byAssignee[name].completed += 1;
+    });
+    return Object.values(byAssignee).map((e) => ({ name: e.name, score: Math.round((e.completed / e.total) * 100) }));
+  }, [tasks]);
 
   if (loading) {
     return (
@@ -98,30 +114,31 @@ export default function Home() {
           <p className="text-[13.5px] text-muted-foreground mt-1">Here's how your bakery is performing today.</p>
         </div>
         <div className="flex items-center gap-2">
-          <select className="h-9 px-3 rounded-lg border border-border bg-card text-[13px] font-medium outline-none focus:ring-2 focus:ring-ring/40">
-            <option>Last 30 days</option>
-            <option>This week</option>
-            <option>This month</option>
-            <option>This year</option>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-border bg-card text-[13px] font-medium outline-none focus:ring-2 focus:ring-ring/40"
+          >
+            {Object.keys(PERIODS).map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
       </div>
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Revenue (Period)" value={`$${revenueTotal.toLocaleString()}`} trend="+18.2%" trendUp icon={DollarSign} accent="emerald" sub={`${orders.length} orders total`} />
-        <StatCard label="Orders Today" value={orders.filter(o => new Date(o.delivery_date) >= new Date(Date.now() - 86400000)).length || orders.length} trend="+12.4%" trendUp icon={ShoppingBag} accent="blue" sub={`${pendingOrders} active · ${completedOrders} completed`} />
-        <StatCard label="Customers" value={customers.length} trend="+8.1%" trendUp icon={Users} accent="violet" sub={`${vipCustomers} VIP · ${customers.filter(c => c.segment === "New").length} new`} />
-        <StatCard label="Inventory Value" value={`$${inventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} trend="-3.2%" trendUp={false} icon={Package} accent="amber" sub={`${lowStock.length} low-stock alerts`} />
+        <StatCard label="Revenue (Period)" value={`$${revenueTotal.toLocaleString()}`} icon={DollarSign} accent="emerald" sub={`${periodOrders.length} orders in period`} />
+        <StatCard label="Orders Today" value={orders.filter(o => o.created_at && new Date(o.created_at) >= new Date(Date.now() - 86400000)).length} icon={ShoppingBag} accent="blue" sub={`${pendingOrders} active · ${completedOrders} completed`} />
+        <StatCard label="Customers" value={customers.length} icon={Users} accent="violet" sub={`${vipCustomers} VIP · ${customers.filter(c => c.segment === "New").length} new`} />
+        <StatCard label="Inventory Value" value={`$${inventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Package} accent="amber" sub={`${lowStock.length} low-stock alerts`} />
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="lg:col-span-2 rounded-2xl border border-border/60 bg-card p-5">
+      {/* Revenue chart */}
+      <div className="grid grid-cols-1 gap-4 mb-6">
+        <div className="rounded-2xl border border-border/60 bg-card p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-heading font-semibold text-[15px]">Revenue & Orders</h3>
-              <p className="text-[12px] text-muted-foreground">Last 7 months</p>
+              <p className="text-[12px] text-muted-foreground">Last 6 months</p>
             </div>
             <div className="flex items-center gap-3 text-[11.5px]">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Revenue</span>
@@ -149,61 +166,10 @@ export default function Home() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-
-        <div className="rounded-2xl border border-border/60 bg-card p-5">
-          <h3 className="font-heading font-semibold text-[15px] mb-1">Traffic Sources</h3>
-          <p className="text-[12px] text-muted-foreground mb-3">Visitor acquisition</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={trafficData} dataKey="value" nameKey="source" cx="50%" cy="50%" innerRadius={48} outerRadius={78} paddingAngle={3}>
-                {trafficData.map((e) => <Cell key={e.source} fill={e.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12.5 }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-1.5 mt-2">
-            {trafficData.map((t) => (
-              <div key={t.source} className="flex items-center justify-between text-[12.5px]">
-                <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: t.color }} />{t.source}</span>
-                <span className="font-semibold">{t.value}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* Website metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Website Visitors" value="4,820" trend="+22%" trendUp icon={Eye} accent="blue" />
-        <StatCard label="Conversion Rate" value="3.8%" trend="+0.6pt" trendUp icon={MousePointerClick} accent="emerald" />
-        <StatCard label="Bounce Rate" value="38.2%" trend="-4.1pt" trendUp icon={TrendingUp} accent="violet" />
-        <StatCard label="Avg. Session" value="3m 42s" trend="+18s" trendUp icon={Zap} accent="amber" />
-      </div>
-
-      {/* AI Insights + Recent orders */}
+      {/* Recent orders */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="lg:col-span-1 rounded-2xl border border-border/60 bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <h3 className="font-heading font-semibold text-[15px]">AI Insights</h3>
-          </div>
-          <div className="space-y-3">
-            {aiInsights.map((ins, idx) => (
-              <div key={idx} className="flex gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${toneMap[ins.tone]} flex items-center justify-center shrink-0`}>
-                  <ins.icon className="w-4 h-4" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[12.5px] font-semibold leading-snug">{ins.title}</div>
-                  <div className="text-[11.5px] text-muted-foreground leading-relaxed mt-0.5">{ins.body}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="lg:col-span-2 rounded-2xl border border-border/60 bg-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-heading font-semibold text-[15px]">Recent Orders</h3>
@@ -229,11 +195,8 @@ export default function Home() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Bottom row: inventory alerts + team */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-border/60 bg-card p-5">
+        <div className="lg:col-span-1 rounded-2xl border border-border/60 bg-card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -259,25 +222,28 @@ export default function Home() {
             </div>
           )}
         </div>
+      </div>
 
+      {/* Team performance (real, derived from Task completion rates) */}
+      <div className="grid grid-cols-1 gap-4">
         <div className="rounded-2xl border border-border/60 bg-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <ListTodo className="w-4 h-4 text-blue-500" />
-            <h3 className="font-heading font-semibold text-[15px]">Team Performance</h3>
+            <h3 className="font-heading font-semibold text-[15px]">Team Task Completion</h3>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={[
-              { name: "Maria", score: 92 }, { name: "James", score: 78 },
-              { name: "Emma", score: 85 }, { name: "David", score: 67 },
-              { name: "Lisa", score: 88 },
-            ]} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
-              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: "hsl(var(--muted-foreground))" }} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12.5 }} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
-              <Bar dataKey="score" radius={[6, 6, 0, 0]} fill="#3b82f6" barSize={28} />
-            </BarChart>
-          </ResponsiveContainer>
+          {teamPerformance.length === 0 ? (
+            <div className="text-[13px] text-muted-foreground py-6 text-center">No tasks assigned yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={teamPerformance} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: "hsl(var(--muted-foreground))" }} unit="%" />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12.5 }} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} formatter={(v) => `${v}%`} />
+                <Bar dataKey="score" name="Completion rate" radius={[6, 6, 0, 0]} fill="#3b82f6" barSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
