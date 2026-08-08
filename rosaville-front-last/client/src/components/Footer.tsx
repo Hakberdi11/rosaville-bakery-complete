@@ -38,6 +38,7 @@ export default function Footer() {
                 { href: '/menu', label: 'Menu' },
                 { href: '/custom-cakes', label: 'Custom Cakes' },
                 { href: '/gallery', label: 'Gallery' },
+                { href: '/order-status', label: 'Track Your Order' },
               ].map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="font-sans text-sm text-foreground hover:text-cta transition-colors">

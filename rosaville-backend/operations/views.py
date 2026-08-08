@@ -4,6 +4,7 @@ from django.db import models
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsAdminOrManagerOrOwner, IsStaff
@@ -15,6 +16,7 @@ from .serializers import (
     GiftCardSerializer,
     InventoryItemSerializer,
     OrderSerializer,
+    PublicOrderStatusSerializer,
     TaskSerializer,
 )
 
@@ -41,6 +43,22 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [CreateOnlyOrIsStaff]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = "__all__"
+
+    def get_permissions(self):
+        if self.action == "lookup":
+            return [AllowAny()]
+        return super().get_permissions()
+
+    @action(detail=False, methods=["get"])
+    def lookup(self, request):
+        order_number = (request.query_params.get("order_number") or "").strip()
+        email = (request.query_params.get("email") or "").strip()
+        if not order_number or not email:
+            return Response({"detail": "order_number and email are required"}, status=status.HTTP_400_BAD_REQUEST)
+        order = Order.objects.filter(order_number__iexact=order_number, email__iexact=email).order_by("-created_at").first()
+        if not order:
+            return Response({"detail": "No order found with that order number and email."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PublicOrderStatusSerializer(order).data)
 
     def perform_create(self, serializer):
         gift_card = None

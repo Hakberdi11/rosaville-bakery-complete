@@ -1,3 +1,5 @@
+import random
+
 from django.conf import settings
 from django.db import models
 
@@ -106,6 +108,14 @@ class Order(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        # front-last's Checkout never sets this (only the dashboard's manual
+        # CreateOrderDialog does), so every order needs a fallback here to be
+        # usable as a customer-facing lookup reference — see PublicOrderStatusSerializer.
+        if not self.order_number:
+            self.order_number = f"RV-{random.randint(100000, 999999)}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.order_number or f"Order #{self.pk}"

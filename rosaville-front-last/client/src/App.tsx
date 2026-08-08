@@ -20,6 +20,7 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import ProductDetail from "./pages/ProductDetail";
 import Favourites from "./pages/Favourites";
+import OrderStatus from "./pages/OrderStatus";
 import { CartProvider } from "./contexts/CartContext";
 
 function Router() {
@@ -41,6 +42,7 @@ function Router() {
             <Route path={"/product/:id"} component={ProductDetail} />
             <Route path={"/cart"} component={Cart} />
             <Route path={"/checkout"} component={Checkout} />
+            <Route path={"/order-status"} component={OrderStatus} />
             <Route path={"/gallery"} component={Gallery} />
             <Route path={"/favourites"} component={Favourites} />
             <Route path={"/custom-cakes"} component={CustomCakes} />

@@ -24,6 +24,15 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class PublicOrderStatusSerializer(serializers.ModelSerializer):
+    """Subset of Order exposed to unauthenticated customers via OrderViewSet.lookup —
+    deliberately excludes internal_notes, address, phone, and gift card fields."""
+
+    class Meta:
+        model = Order
+        fields = ["order_number", "status", "payment_status", "items", "total_value", "delivery_date", "created_at"]
+
+
 class GiftCardSerializer(serializers.ModelSerializer):
     class Meta:
         model = GiftCard
