@@ -51,6 +51,12 @@ export default function Orders() {
     if (selected?.id === id) setSelected({ ...selected, status });
   };
 
+  const updateAmountPaid = async (id, amount_paid) => {
+    const updated = await entities.Order.update(id, { amount_paid });
+    setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
+    if (selected?.id === id) setSelected(updated);
+  };
+
   const totalValue = filtered.reduce((s, o) => s + (o.total_value || 0), 0);
 
   return (
@@ -146,7 +152,8 @@ export default function Orders() {
       {selected && (
         <OrderDetail order={selected} desserts={desserts} inventory={inventory}
           onClose={() => setSelected(null)}
-          onStatus={updateStatus} />
+          onStatus={updateStatus}
+          onAmountPaid={updateAmountPaid} />
       )}
 
       <CreateOrderDialog open={createOpen} desserts={desserts} inventory={inventory}
@@ -179,7 +186,11 @@ function IngredientSummary({ items, desserts, inventory }) {
   );
 }
 
-function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
+function OrderDetail({ order, desserts, inventory, onClose, onStatus, onAmountPaid }) {
+  const [amountPaidInput, setAmountPaidInput] = useState(String(order.amount_paid ?? 0));
+  useEffect(() => setAmountPaidInput(String(order.amount_paid ?? 0)), [order.id, order.amount_paid]);
+  const balanceDue = (Number(order.total_value) || 0) - (Number(order.amount_paid) || 0);
+
   return (
     <Dialog open={!!order} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
@@ -196,6 +207,27 @@ function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
                 <Gift className="w-3.5 h-3.5" /> ${Number(order.gift_card_amount_applied).toFixed(2)} applied from gift card {order.gift_card_code}
               </div>
             )}
+          </div>
+
+          <div className="rounded-xl border border-border/60 p-3 flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-[12px] mb-1 block">Amount Paid</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative w-28">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
+                  <Input type="number" step="0.01" min="0" value={amountPaidInput}
+                    onChange={(e) => setAmountPaidInput(e.target.value)}
+                    onBlur={(e) => onAmountPaid(order.id, Number(e.target.value) || 0)}
+                    className="h-8 pl-5 text-[12.5px]" />
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] text-muted-foreground uppercase mb-0.5">Balance Due</div>
+              <div className={cn("font-semibold text-[15px]", balanceDue > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+                ${balanceDue.toFixed(2)}
+              </div>
+            </div>
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground uppercase mb-1.5">Items</div>

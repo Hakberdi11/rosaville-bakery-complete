@@ -100,6 +100,7 @@ class Order(models.Model):
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     internal_notes = models.TextField(blank=True)
     channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.WEBSITE)
 
