@@ -21,6 +21,7 @@ from .serializers import (
     SupplierSerializer,
     TaskSerializer,
 )
+from .services import deduct_order_ingredients, order_deduction_net_by_item, reverse_order_ingredient_deduction
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
@@ -101,6 +102,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not order:
             return Response({"detail": "No order found with that order number and email."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PublicOrderStatusSerializer(order).data)
+
+    def perform_update(self, serializer):
+        old_status = serializer.instance.status
+        order = serializer.save()
+        if order.status == Order.Status.CONFIRMED and old_status != Order.Status.CONFIRMED:
+            # Guard against double-deduction (e.g. Confirmed set twice in a
+            # row via separate requests) by checking net-of-movements is zero
+            # rather than a simple "already ran once" flag — this also makes
+            # Confirmed -> Cancelled -> Confirmed cycles deduct correctly again.
+            if not order_deduction_net_by_item(order):
+                deduct_order_ingredients(order)
+        elif order.status in (Order.Status.CANCELLED, Order.Status.REFUNDED) and old_status not in (
+            Order.Status.CANCELLED,
+            Order.Status.REFUNDED,
+        ):
+            reverse_order_ingredient_deduction(order)
 
     def perform_create(self, serializer):
         gift_card = None
