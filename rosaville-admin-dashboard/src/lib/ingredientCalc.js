@@ -87,6 +87,46 @@ export function calculateOrdersCOGS(orders, desserts, inventory) {
   return totalCost;
 }
 
+// Flags ingredients where current stock represents far more supply than recent
+// actual usage supports — a lightweight over-ordering/waste-risk signal, not a
+// full demand-forecasting model. Looks at fulfilled/placed orders (excluding
+// Cancelled/Refunded) from the last `lookbackDays`, derives a weekly usage
+// rate per ingredient, and flags items stocked beyond `overstockWeeks` worth
+// of that rate. Items with no usage history in the window aren't flagged —
+// "never sold" and "overstocked" aren't the same signal, and treating
+// zero-usage as overstocked would false-flag every seasonal/new ingredient.
+export function calculateWasteRisk(inventory, orders, desserts, { lookbackDays = 28, overstockWeeks = 6 } = {}) {
+  const cutoff = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
+  const recentOrders = orders.filter((o) => {
+    if (["Cancelled", "Refunded"].includes(o.status)) return false;
+    const created = o.created_at ? new Date(o.created_at).getTime() : NaN;
+    return !Number.isNaN(created) && created >= cutoff;
+  });
+
+  const totalConsumption = {};
+  for (const order of recentOrders) {
+    const cons = calculateOrderIngredients(order, desserts);
+    for (const [id, c] of Object.entries(cons)) {
+      const item = inventory.find((i) => String(i.id) === String(id));
+      const converted = convertUnit(c.quantity, c.unit, item?.unit);
+      totalConsumption[id] = (totalConsumption[id] || 0) + converted;
+    }
+  }
+
+  const weeks = lookbackDays / 7;
+  return inventory.map((item) => {
+    const used = totalConsumption[item.id] || 0;
+    const weeklyUsageRate = used / weeks;
+    const weeksOfSupply = weeklyUsageRate > 0 ? (item.current_stock || 0) / weeklyUsageRate : null;
+    return {
+      ...item,
+      weekly_usage_rate: weeklyUsageRate,
+      weeks_of_supply: weeksOfSupply,
+      overstocked: weeksOfSupply !== null && weeksOfSupply > overstockWeeks,
+    };
+  });
+}
+
 // Aggregates ingredient needs across a list of orders (for the order composer preview).
 export function summarizeIngredients(items, desserts, inventory) {
   const pseudo = { items };

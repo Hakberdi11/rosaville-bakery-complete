@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { entities } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff } from "lucide-react";
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { calculateProjectedStock } from "@/lib/ingredientCalc";
+import { calculateProjectedStock, calculateWasteRisk } from "@/lib/ingredientCalc";
 
 const UNITS = ["kg", "g", "L", "ml", "pcs", "box"];
 const CATEGORIES = ["Flour & Grains", "Dairy", "Sugar & Sweeteners", "Chocolate", "Fruits", "Flavorings", "Packaging", "Other"];
@@ -22,6 +22,7 @@ export default function Inventory() {
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [showProjected, setShowProjected] = useState(false);
+  const [showWasteRisk, setShowWasteRisk] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -37,10 +38,16 @@ export default function Inventory() {
   };
   useEffect(() => { load(); }, []);
 
-  const enriched = useMemo(
-    () => showProjected ? calculateProjectedStock(items, orders, desserts) : items,
-    [showProjected, items, orders, desserts]
-  );
+  const wasteRiskById = useMemo(() => {
+    const map = {};
+    calculateWasteRisk(items, orders, desserts).forEach((w) => { map[w.id] = w; });
+    return map;
+  }, [items, orders, desserts]);
+
+  const enriched = useMemo(() => {
+    const base = showProjected ? calculateProjectedStock(items, orders, desserts) : items;
+    return base.map((it) => ({ ...it, ...wasteRiskById[it.id] }));
+  }, [showProjected, items, orders, desserts, wasteRiskById]);
 
   const filtered = useMemo(
     () => enriched.filter((i) => !search || i.name?.toLowerCase().includes(search.toLowerCase())),
@@ -50,6 +57,7 @@ export default function Inventory() {
   const lowStock = items.filter((i) => i.current_stock <= i.minimum_stock);
   const totalValue = items.reduce((s, i) => s + (i.current_stock || 0) * (i.cost_per_unit || 0), 0);
   const shortfallCount = showProjected ? enriched.filter((i) => i.projected_stock < i.minimum_stock).length : 0;
+  const overstockedCount = Object.values(wasteRiskById).filter((w) => w.overstocked).length;
 
   const remove = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return;
@@ -75,6 +83,10 @@ export default function Inventory() {
               {showProjected ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               {showProjected ? "Hide Projected" : "Show Projected Stock"}
             </Button>
+            <Button variant={showWasteRisk ? "default" : "outline"} size="sm" className="gap-2" onClick={() => setShowWasteRisk((v) => !v)}>
+              <PackageX className="w-4 h-4" />
+              {showWasteRisk ? "Hide Waste Risk" : "Show Waste Risk"}
+            </Button>
             <Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Add Item</Button>
           </>
         }
@@ -90,6 +102,12 @@ export default function Inventory() {
       {showProjected && (
         <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-2.5 mb-4 text-[12.5px] text-blue-700 dark:text-blue-300">
           Showing <strong>projected stock</strong> = current stock minus ingredients needed for all active orders (Pending → Ready).
+        </div>
+      )}
+
+      {showWasteRisk && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-2.5 mb-4 text-[12.5px] text-violet-700 dark:text-violet-300">
+          Showing <strong>weeks of supply</strong> = current stock ÷ average weekly usage over the last 4 weeks. Items stocked beyond 6 weeks of actual demand are flagged as overstocked ({overstockedCount} found) — items with no recent sales history aren't flagged, since that's a different signal than over-ordering.
         </div>
       )}
 
@@ -113,6 +131,7 @@ export default function Inventory() {
                   <th className="px-4 py-3 font-medium">Current Stock</th>
                   {showProjected && <th className="px-4 py-3 font-medium">Predicted Usage</th>}
                   {showProjected && <th className="px-4 py-3 font-medium">Projected Stock</th>}
+                  {showWasteRisk && <th className="px-4 py-3 font-medium">Weeks of Supply</th>}
                   <th className="px-4 py-3 font-medium">Min</th>
                   <th className="px-4 py-3 font-medium">Cost/Unit</th>
                   <th className="px-4 py-3 font-medium">Value</th>
@@ -148,6 +167,18 @@ export default function Inventory() {
                           <span className={cn("font-semibold tabular-nums", projectedOut ? "text-rose-500" : projectedLow ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400")}>
                             {(i.projected_stock || 0).toFixed(2)} {i.unit}
                           </span>
+                        </td>
+                      )}
+                      {showWasteRisk && (
+                        <td className="px-4 py-3">
+                          {i.weeks_of_supply === null || i.weeks_of_supply === undefined ? (
+                            <span className="text-muted-foreground">No recent sales</span>
+                          ) : (
+                            <span className={cn("font-semibold tabular-nums flex items-center gap-1", i.overstocked ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground")}>
+                              {i.overstocked && <PackageX className="w-3.5 h-3.5" />}
+                              {i.weeks_of_supply.toFixed(1)} wks
+                            </span>
+                          )}
                         </td>
                       )}
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">{i.minimum_stock} {i.unit}</td>
