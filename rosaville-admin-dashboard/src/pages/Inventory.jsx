@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { entities } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX } from "lucide-react";
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,13 @@ import { calculateProjectedStock, calculateWasteRisk } from "@/lib/ingredientCal
 
 const UNITS = ["kg", "g", "L", "ml", "pcs", "box"];
 const CATEGORIES = ["Flour & Grains", "Dairy", "Sugar & Sweeteners", "Chocolate", "Fruits", "Flavorings", "Packaging", "Other"];
+const EXPIRING_SOON_DAYS = 7;
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const ms = new Date(dateStr).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.round(ms / 86400000);
+}
 
 export default function Inventory() {
   const [items, setItems] = useState([]);
@@ -58,6 +65,7 @@ export default function Inventory() {
   const totalValue = items.reduce((s, i) => s + (i.current_stock || 0) * (i.cost_per_unit || 0), 0);
   const shortfallCount = showProjected ? enriched.filter((i) => i.projected_stock < i.minimum_stock).length : 0;
   const overstockedCount = Object.values(wasteRiskById).filter((w) => w.overstocked).length;
+  const expiringSoonCount = items.filter((i) => { const d = daysUntil(i.expiry_date); return d !== null && d <= EXPIRING_SOON_DAYS; }).length;
 
   const remove = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return;
@@ -145,12 +153,22 @@ export default function Inventory() {
                   const isOut = i.current_stock <= 0;
                   const projectedLow = showProjected && i.projected_stock < i.minimum_stock;
                   const projectedOut = showProjected && i.projected_stock <= 0;
+                  const expiryDays = daysUntil(i.expiry_date);
+                  const isExpired = expiryDays !== null && expiryDays < 0;
+                  const isExpiringSoon = expiryDays !== null && expiryDays >= 0 && expiryDays <= EXPIRING_SOON_DAYS;
                   return (
                     <tr key={i.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <div className={cn("w-2 h-2 rounded-full", projectedOut ? "bg-rose-600" : projectedLow ? "bg-amber-500" : isOut ? "bg-rose-500" : isLow ? "bg-amber-500" : "bg-emerald-500")} />
                           <span className="font-medium">{i.name}</span>
+                          {(isExpired || isExpiringSoon) && (
+                            <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold",
+                              isExpired ? "bg-rose-500/12 text-rose-600 dark:text-rose-400" : "bg-amber-500/12 text-amber-600 dark:text-amber-400")}>
+                              <Clock className="w-3 h-3" />
+                              {isExpired ? "Expired" : expiryDays === 0 ? "Expires today" : `Expires in ${expiryDays}d`}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{i.category}</td>
@@ -211,7 +229,7 @@ function ItemDialog({ open, item, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, supplier: "", cost_per_unit: 0 });
+    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, supplier: "", cost_per_unit: 0, expiry_date: "" });
   }, [open, item]);
 
   if (!form) return null;
@@ -220,7 +238,7 @@ function ItemDialog({ open, item, onClose, onSaved }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const payload = { ...form, current_stock: Number(form.current_stock) || 0, minimum_stock: Number(form.minimum_stock) || 0, cost_per_unit: Number(form.cost_per_unit) || 0 };
+      const payload = { ...form, current_stock: Number(form.current_stock) || 0, minimum_stock: Number(form.minimum_stock) || 0, cost_per_unit: Number(form.cost_per_unit) || 0, expiry_date: form.expiry_date || null };
       if (isEdit) await entities.InventoryItem.update(item.id, payload);
       else await entities.InventoryItem.create(payload);
       onSaved(); onClose();
@@ -250,6 +268,7 @@ function ItemDialog({ open, item, onClose, onSaved }) {
           <div><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => set("minimum_stock", e.target.value)} className="mt-1" /></div>
           <div><Label>Cost Per Unit ($)</Label><Input type="number" step="0.01" value={form.cost_per_unit} onChange={(e) => set("cost_per_unit", e.target.value)} className="mt-1" /></div>
           <div><Label>Supplier</Label><Input value={form.supplier} onChange={(e) => set("supplier", e.target.value)} className="mt-1" /></div>
+          <div><Label>Expiry Date</Label><Input type="date" value={form.expiry_date || ""} onChange={(e) => set("expiry_date", e.target.value)} className="mt-1" /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

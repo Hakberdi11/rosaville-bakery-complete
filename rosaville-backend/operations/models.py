@@ -54,6 +54,7 @@ class InventoryItem(models.Model):
     supplier = models.CharField(max_length=255, blank=True)
     cost_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     category = models.CharField(max_length=100, default="Other")
+    expiry_date = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
