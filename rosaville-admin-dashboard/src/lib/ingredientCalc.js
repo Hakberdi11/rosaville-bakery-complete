@@ -18,6 +18,22 @@ export function convertUnit(quantity, from, to) {
   return quantity; // unknown pairing — assume 1:1
 }
 
+// Units convertUnit can actually convert to/from the given unit (its own
+// compatibility group, e.g. {kg,g,lb,oz} or {L,ml}), plus itself. Units with
+// no CONVERSIONS entries (pcs, box, cup, tbsp, tsp) only match themselves —
+// used to keep an ingredient's unit picker from offering an incompatible unit
+// once it's linked to a real InventoryItem (convertUnit silently assumes 1:1
+// for unknown pairings, which would silently mis-cost/mis-deduct stock).
+export function getCompatibleUnits(unit) {
+  if (!unit) return UNITS;
+  const group = new Set([unit]);
+  if (CONVERSIONS[unit]) Object.keys(CONVERSIONS[unit]).forEach((u) => group.add(u));
+  for (const [from, targets] of Object.entries(CONVERSIONS)) {
+    if (targets[unit] !== undefined) group.add(from);
+  }
+  return UNITS.filter((u) => group.has(u));
+}
+
 // Returns { [inventory_item_id]: { name, unit, quantity } } for one order.
 // Uses size-specific ingredients when a size defines its own; otherwise falls
 // back to the base recipe scaled by the size multiplier.
