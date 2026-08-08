@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Supplier, Task
+from .models import Customer, Feedback, GiftCard, InventoryItem, Order, StockMovement, Supplier, Task
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -24,6 +24,25 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         model = InventoryItem
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def update(self, instance, validated_data):
+        # current_stock may only change via InventoryItemViewSet.adjust (or,
+        # later, PO receiving / order auto-deduction) — all of which go through
+        # apply_stock_movement() so every change is audit-logged. A raw PATCH
+        # here silently drops any current_stock key instead of erroring, since
+        # older UI code may still send the field unchanged alongside real edits.
+        validated_data.pop("current_stock", None)
+        return super().update(instance, validated_data)
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    inventory_item_name = serializers.CharField(source="inventory_item.name", read_only=True, default="")
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default="")
+
+    class Meta:
+        model = StockMovement
+        fields = "__all__"
+        read_only_fields = ["id", "created_at"]
 
 
 class OrderSerializer(serializers.ModelSerializer):

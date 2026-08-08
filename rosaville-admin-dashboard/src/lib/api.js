@@ -94,6 +94,7 @@ export const entities = {
   CustomCakeOrder: makeResource("custom-cake-orders"),
   GiftCard: makeResource("gift-cards"),
   Supplier: makeResource("suppliers"),
+  StockMovement: makeResource("stock-movements"),
 };
 
 export async function lookupGiftCard(code) {
@@ -106,6 +107,13 @@ export async function adjustGiftCard(id, delta) {
 
 export async function voidGiftCard(id) {
   return request(`/api/gift-cards/${id}/void/`, { method: "POST" });
+}
+
+export async function adjustInventoryStock(id, delta, { reason, movementType } = {}) {
+  return request(`/api/inventory/${id}/adjust/`, {
+    method: "POST",
+    body: JSON.stringify({ delta, reason, movement_type: movementType }),
+  });
 }
 
 export const siteContent = {

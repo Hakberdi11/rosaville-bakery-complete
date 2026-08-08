@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { entities } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock } from "lucide-react";
+import { entities, adjustInventoryStock } from '@/lib/api';
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export default function Inventory() {
   const [createOpen, setCreateOpen] = useState(false);
   const [showProjected, setShowProjected] = useState(false);
   const [showWasteRisk, setShowWasteRisk] = useState(false);
+  const [historyItem, setHistoryItem] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -75,9 +76,13 @@ export default function Inventory() {
   };
 
   const adjustStock = async (item, delta) => {
-    const newStock = Math.max(0, (item.current_stock || 0) + delta);
-    await entities.InventoryItem.update(item.id, { current_stock: newStock });
-    setItems((p) => p.map((x) => (x.id === item.id ? { ...x, current_stock: newStock } : x)));
+    try {
+      const updated = await adjustInventoryStock(item.id, delta);
+      setItems((p) => p.map((x) => (x.id === item.id ? updated : x)));
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Could not adjust stock.");
+    }
   };
 
   return (
@@ -101,11 +106,12 @@ export default function Inventory() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="Total Items" value={items.length} icon={Package} accent="blue" />
         <StatCard label="Inventory Value" value={`$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={DollarSign} accent="emerald" />
         <StatCard label="Low Stock Alerts" value={lowStock.length} icon={AlertTriangle} accent={lowStock.length ? "rose" : "default"} />
         <StatCard label={showProjected ? "Projected Shortfalls" : "Out of Stock"} value={showProjected ? shortfallCount : items.filter((i) => i.current_stock <= 0).length} icon={TrendingDown} accent={showProjected && shortfallCount ? "rose" : "amber"} sub={showProjected ? "after active orders" : undefined} />
+        <StatCard label="Expiring Soon" value={expiringSoonCount} icon={Clock} accent={expiringSoonCount ? "amber" : "default"} sub={`within ${EXPIRING_SOON_DAYS}d`} />
       </div>
 
       {showProjected && (
@@ -206,6 +212,7 @@ export default function Inventory() {
                       <td className="px-4 py-3 text-muted-foreground">{i.supplier_name || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => setHistoryItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center" title="Stock History"><History className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => setEditItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => remove(i)} className="w-7 h-7 rounded-lg hover:bg-rose-50 flex items-center justify-center"><Trash2 className="w-3.5 h-3.5 text-rose-500" /></button>
                         </div>
@@ -220,7 +227,65 @@ export default function Inventory() {
       </div>
 
       <ItemDialog open={createOpen || !!editItem} item={editItem} suppliers={suppliers} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
+      <StockHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
     </div>
+  );
+}
+
+const MOVEMENT_COLORS = {
+  "Manual Adjustment": "text-muted-foreground",
+  "Received": "text-emerald-600 dark:text-emerald-400",
+  "Production Use": "text-amber-600 dark:text-amber-400",
+  "Waste/Spoilage": "text-rose-600 dark:text-rose-400",
+  "Stock Take Correction": "text-violet-600 dark:text-violet-400",
+};
+
+function StockHistoryDialog({ item, onClose }) {
+  const [movements, setMovements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!item) return;
+    setLoading(true);
+    entities.StockMovement.list("-created_date", 500)
+      .then((rows) => setMovements(rows.filter((m) => String(m.inventory_item) === String(item.id))))
+      .catch((e) => console.error(e))
+      .finally(() => setLoading(false));
+  }, [item]);
+
+  return (
+    <Dialog open={!!item} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Stock History — {item?.name}</DialogTitle></DialogHeader>
+        <div className="py-2">
+          {loading ? (
+            <div className="p-8 flex justify-center"><div className="w-6 h-6 border-4 border-border border-t-primary rounded-full animate-spin" /></div>
+          ) : movements.length === 0 ? (
+            <p className="text-[12.5px] text-muted-foreground italic py-4 text-center">No stock movements recorded yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {movements.map((m) => (
+                <div key={m.id} className="rounded-lg border border-border/60 px-3 py-2 flex items-center justify-between gap-3 text-[12.5px]">
+                  <div className="min-w-0">
+                    <div className={cn("font-medium", MOVEMENT_COLORS[m.movement_type] || "")}>{m.movement_type}</div>
+                    {m.reason && <div className="text-muted-foreground truncate">{m.reason}</div>}
+                    <div className="text-[11px] text-muted-foreground">
+                      {new Date(m.created_at).toLocaleString()}{m.created_by_name ? ` · ${m.created_by_name}` : ""}
+                    </div>
+                  </div>
+                  <span className={cn("font-semibold tabular-nums whitespace-nowrap", Number(m.quantity_delta) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500")}>
+                    {Number(m.quantity_delta) >= 0 ? "+" : ""}{Number(m.quantity_delta).toFixed(2)} {item?.unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

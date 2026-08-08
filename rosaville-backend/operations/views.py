@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsAdminOrManagerOrOwner, IsStaff
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Supplier, Task
+from .models import Customer, Feedback, GiftCard, InventoryItem, Order, StockMovement, Supplier, Task
 from .serializers import (
     CustomerSerializer,
     FeedbackSerializer,
@@ -17,6 +17,7 @@ from .serializers import (
     InventoryItemSerializer,
     OrderSerializer,
     PublicOrderStatusSerializer,
+    StockMovementSerializer,
     SupplierSerializer,
     TaskSerializer,
 )
@@ -44,6 +45,38 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaff]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = "__all__"
+
+    @action(detail=True, methods=["post"])
+    def adjust(self, request, pk=None):
+        item = self.get_object()
+        try:
+            delta = Decimal(str(request.data.get("delta")))
+        except Exception:
+            return Response({"detail": "delta must be a number"}, status=status.HTTP_400_BAD_REQUEST)
+        if item.current_stock + delta < 0:
+            return Response({"detail": "Stock cannot go below zero"}, status=status.HTTP_400_BAD_REQUEST)
+        reason = (request.data.get("reason") or "").strip()
+        movement_type = request.data.get("movement_type") or StockMovement.MovementType.MANUAL_ADJUSTMENT
+        if movement_type not in StockMovement.MovementType.values:
+            return Response({"detail": "Invalid movement_type"}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user if request.user.is_authenticated else None
+        item.apply_stock_movement(movement_type=movement_type, quantity_delta=delta, reason=reason, created_by=user)
+        return Response(self.get_serializer(item).data)
+
+
+class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = StockMovement.objects.select_related("inventory_item", "created_by").all()
+    serializer_class = StockMovementSerializer
+    permission_classes = [IsStaff]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = "__all__"
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        item_id = self.request.query_params.get("inventory_item")
+        if item_id:
+            qs = qs.filter(inventory_item_id=item_id)
+        return qs
 
 
 class OrderViewSet(viewsets.ModelViewSet):

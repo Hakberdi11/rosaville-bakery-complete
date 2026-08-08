@@ -6,6 +6,7 @@ from .views import (
     GiftCardViewSet,
     InventoryItemViewSet,
     OrderViewSet,
+    StockMovementViewSet,
     SupplierViewSet,
     TaskViewSet,
 )
@@ -14,6 +15,7 @@ router = DefaultRouter()
 router.register("customers", CustomerViewSet, basename="customer")
 router.register("suppliers", SupplierViewSet, basename="supplier")
 router.register("inventory", InventoryItemViewSet, basename="inventoryitem")
+router.register("stock-movements", StockMovementViewSet, basename="stockmovement")
 router.register("orders", OrderViewSet, basename="order")
 router.register("gift-cards", GiftCardViewSet, basename="giftcard")
 router.register("feedback", FeedbackViewSet, basename="feedback")

@@ -85,6 +85,54 @@ class InventoryItem(models.Model):
     def __str__(self):
         return self.name
 
+    def apply_stock_movement(self, *, movement_type, quantity_delta, reason="", related_order=None, created_by=None):
+        """The only sanctioned way current_stock changes after creation —
+        an atomic F()-update plus a StockMovement audit row, in one transaction.
+        Called from InventoryItemViewSet.adjust and order-fulfillment
+        auto-deduction — never a raw field write."""
+        from django.db import transaction
+
+        with transaction.atomic():
+            InventoryItem.objects.filter(pk=self.pk).update(current_stock=models.F("current_stock") + quantity_delta)
+            self.refresh_from_db(fields=["current_stock"])
+            StockMovement.objects.create(
+                inventory_item=self,
+                movement_type=movement_type,
+                quantity_delta=quantity_delta,
+                reason=reason,
+                related_order=related_order,
+                created_by=created_by,
+            )
+        return self
+
+
+class StockMovement(models.Model):
+    class MovementType(models.TextChoices):
+        MANUAL_ADJUSTMENT = "Manual Adjustment", "Manual Adjustment"
+        RECEIVED = "Received", "Received"
+        PRODUCTION_USE = "Production Use", "Production Use"
+        WASTE = "Waste/Spoilage", "Waste/Spoilage"
+        STOCK_TAKE_CORRECTION = "Stock Take Correction", "Stock Take Correction"
+
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name="stock_movements")
+    movement_type = models.CharField(max_length=30, choices=MovementType.choices)
+    quantity_delta = models.DecimalField(max_digits=10, decimal_places=2)  # signed: + in, - out
+    reason = models.CharField(max_length=500, blank=True)
+    related_order = models.ForeignKey(
+        "Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
+    )
+    # related_purchase_order FK is added in a later migration once PurchaseOrder exists.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.inventory_item.name} {self.quantity_delta:+} ({self.movement_type})"
+
 
 class Order(models.Model):
     class Status(models.TextChoices):
