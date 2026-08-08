@@ -63,6 +63,29 @@ export default function Orders() {
 
   const totalValue = filtered.reduce((s, o) => s + (o.total_value || 0), 0);
 
+  const exportCsv = () => {
+    const headers = ["Order #", "Customer", "Email", "Delivery Date", "Total", "Payment Status", "Status"];
+    const rows = filtered.map((o) => [
+      o.order_number || `#${String(o.id).slice(-6)}`,
+      o.customer_name || "",
+      o.email || "",
+      o.delivery_date || "",
+      (o.total_value || 0).toFixed(2),
+      o.payment_status || "",
+      o.status || "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-5 lg:p-8 max-w-[1400px] mx-auto">
       <PageHeader
@@ -71,7 +94,7 @@ export default function Orders() {
         icon={ShoppingBag}
         actions={
           <>
-            <Button variant="outline" size="sm" className="gap-2"><Download className="w-4 h-4" /> Export</Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={exportCsv}><Download className="w-4 h-4" /> Export</Button>
             <Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> New Order</Button>
           </>
         }
