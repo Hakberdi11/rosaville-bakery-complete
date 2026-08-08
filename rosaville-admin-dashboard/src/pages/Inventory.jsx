@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { entities, adjustInventoryStock } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History, ShoppingCart } from "lucide-react";
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History, ShoppingCart, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export default function Inventory() {
   const [showProjected, setShowProjected] = useState(false);
   const [showWasteRisk, setShowWasteRisk] = useState(false);
   const [historyItem, setHistoryItem] = useState(null);
+  const [stockTakeOpen, setStockTakeOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -102,6 +103,9 @@ export default function Inventory() {
             <Button variant={showWasteRisk ? "default" : "outline"} size="sm" className="gap-2" onClick={() => setShowWasteRisk((v) => !v)}>
               <PackageX className="w-4 h-4" />
               {showWasteRisk ? "Hide Waste Risk" : "Show Waste Risk"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setStockTakeOpen(true)}>
+              <ClipboardCheck className="w-4 h-4" /> Start Stock Take
             </Button>
             <Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Add Item</Button>
           </>
@@ -233,7 +237,114 @@ export default function Inventory() {
 
       <ItemDialog open={createOpen || !!editItem} item={editItem} suppliers={suppliers} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
       <StockHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
+      {stockTakeOpen && <StockTakeDialog items={items} onClose={() => setStockTakeOpen(false)} onDone={load} />}
     </div>
+  );
+}
+
+const VARIANCE_FLAG_THRESHOLD = 0.02; // 2%, per industry rule of thumb for healthy inventory variance
+
+function StockTakeDialog({ items, onClose, onDone }) {
+  const [counts, setCounts] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [results, setResults] = useState({}); // { [itemId]: "ok" | "error" }
+  const [search, setSearch] = useState("");
+
+  const rows = useMemo(
+    () => items.filter((i) => !search || i.name?.toLowerCase().includes(search.toLowerCase())),
+    [items, search]
+  );
+
+  const setCount = (id, v) => setCounts((p) => ({ ...p, [id]: v }));
+
+  const varianceFor = (item) => {
+    const counted = counts[item.id];
+    if (counted === undefined || counted === "") return null;
+    const countedNum = Number(counted);
+    if (Number.isNaN(countedNum)) return null;
+    const delta = countedNum - Number(item.current_stock || 0);
+    const pct = item.current_stock ? delta / Number(item.current_stock) : (delta !== 0 ? 1 : 0);
+    return { delta, pct };
+  };
+
+  const changedCount = Object.entries(counts).filter(([, v]) => v !== "" && v !== undefined).length;
+
+  const submit = async () => {
+    const entries = items
+      .map((item) => ({ item, variance: varianceFor(item) }))
+      .filter(({ variance }) => variance && variance.delta !== 0);
+    if (entries.length === 0) { onClose(); return; }
+
+    setSubmitting(true);
+    const nextResults = {};
+    for (const { item, variance } of entries) {
+      try {
+        await adjustInventoryStock(item.id, variance.delta, { reason: "Stock take", movementType: "Stock Take Correction" });
+        nextResults[item.id] = "ok";
+      } catch (e) {
+        console.error(e);
+        nextResults[item.id] = "error";
+      }
+      setResults((p) => ({ ...p, [item.id]: nextResults[item.id] }));
+    }
+    setSubmitting(false);
+    onDone();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Stock Take</DialogTitle></DialogHeader>
+        <div className="py-2 space-y-3">
+          <p className="text-[12.5px] text-muted-foreground">
+            Enter the physically counted quantity for each item you're checking. Variances beyond ±{(VARIANCE_FLAG_THRESHOLD * 100).toFixed(0)}% are flagged. Only changed rows are submitted as corrections.
+          </p>
+          <div className="relative max-w-sm">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ingredients…" className="pl-9 h-9" />
+          </div>
+          <div className="rounded-xl border border-border/60 divide-y divide-border/40 max-h-[45vh] overflow-y-auto">
+            {rows.map((item) => {
+              const variance = varianceFor(item);
+              const flagged = variance && Math.abs(variance.pct) > VARIANCE_FLAG_THRESHOLD;
+              const result = results[item.id];
+              return (
+                <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-[13px] truncate">{item.name}</div>
+                    <div className="text-[11px] text-muted-foreground">System: {item.current_stock} {item.unit}</div>
+                  </div>
+                  <Input
+                    type="number" step="0.01" placeholder="Counted"
+                    value={counts[item.id] ?? ""}
+                    onChange={(e) => setCount(item.id, e.target.value)}
+                    className="h-9 w-24 text-[12.5px]"
+                    disabled={submitting}
+                  />
+                  <div className="w-24 text-right text-[11.5px]">
+                    {variance && variance.delta !== 0 && (
+                      <span className={cn("font-medium tabular-nums", flagged ? "text-rose-500" : "text-muted-foreground")}>
+                        {variance.delta > 0 ? "+" : ""}{variance.delta.toFixed(2)} ({(variance.pct * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-5 shrink-0">
+                    {result === "ok" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    {result === "error" && <XCircle className="w-4 h-4 text-rose-500" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button onClick={submit} disabled={submitting} className="bg-rose-600 hover:bg-rose-700">
+            {submitting ? "Submitting…" : changedCount > 0 ? `Submit Stock Take (${changedCount})` : "Close"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
