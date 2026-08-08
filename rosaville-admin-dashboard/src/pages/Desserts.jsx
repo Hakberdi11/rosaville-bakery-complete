@@ -13,12 +13,7 @@ import { cn } from "@/lib/utils";
 import RecipeEditor from "@/components/admin/RecipeEditor";
 
 const CATEGORIES = ["Signature Cakes", "Custom Cakes", "Seasonal Specials", "Cupcakes", "Pastries", "Cheesecakes"];
-const SAMPLE_IMAGES = [
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-];
+const FALLBACK_IMAGE = "/placeholder-dessert.svg";
 
 export default function Desserts() {
   const [desserts, setDesserts] = useState([]);
@@ -101,7 +96,7 @@ export default function Desserts() {
           {filtered.map((d) => (
             <div key={d.id} className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:shadow-md transition-all">
               <div className="relative aspect-[4/3] bg-muted overflow-hidden">
-                <Image src={d.featured_image || d.images?.[0] || SAMPLE_IMAGES[0]} alt={d.name} fittingType="fill" className="w-full h-full" />
+                <Image src={d.featured_image || d.images?.[0] || FALLBACK_IMAGE} alt={d.name} fittingType="fill" className="w-full h-full" />
                 <div className="absolute top-2.5 left-2.5 flex gap-1.5">
                   {d.featured && <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-white" /> Featured</span>}
                   {d.seasonal && <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-semibold">Seasonal</span>}
