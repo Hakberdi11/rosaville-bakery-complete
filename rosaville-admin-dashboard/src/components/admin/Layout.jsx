@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShoppingBag, Users, Cake, Image, FileText, Inbox,
   Package, Factory, ChefHat, Megaphone, UserCog, ListTodo,
   Bell, FileBarChart, Settings, ScrollText, TrendingUp, Moon, Sun,
-  Menu, Search, LogOut, Sparkles, Users2, Gift
+  Menu, Search, LogOut, Sparkles, Users2, Gift, Truck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ const navGroups = [
     label: "Operations",
     items: [
       { label: "Inventory", path: "/inventory", icon: Package, roles: ["admin", "manager"] },
+      { label: "Suppliers", path: "/suppliers", icon: Truck, roles: ["admin", "manager"] },
       { label: "Production", path: "/production", icon: Factory, roles: ["admin", "manager", "employee"] },
       { label: "Recipes", path: "/recipes", icon: ChefHat, roles: ["admin", "manager"] },
     ],

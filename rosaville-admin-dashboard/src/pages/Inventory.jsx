@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { calculateProjectedStock, calculateWasteRisk } from "@/lib/ingredientCalc";
+import { calculateProjectedStock, calculateWasteRisk, UNITS } from "@/lib/ingredientCalc";
 
-const UNITS = ["kg", "g", "L", "ml", "pcs", "box"];
 const CATEGORIES = ["Flour & Grains", "Dairy", "Sugar & Sweeteners", "Chocolate", "Fruits", "Flavorings", "Packaging", "Other"];
 const EXPIRING_SOON_DAYS = 7;
 
@@ -24,6 +23,7 @@ export default function Inventory() {
   const [items, setItems] = useState([]);
   const [orders, setOrders] = useState([]);
   const [desserts, setDesserts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState(null);
@@ -34,12 +34,13 @@ export default function Inventory() {
   const load = async () => {
     setLoading(true);
     try {
-      const [i, o, d] = await Promise.all([
+      const [i, o, d, s] = await Promise.all([
         entities.InventoryItem.list("-created_date", 500),
         entities.Order.list("-created_date", 500),
         entities.Dessert.list("-display_order", 500),
+        entities.Supplier.list("name", 500),
       ]);
-      setItems(i); setOrders(o); setDesserts(d);
+      setItems(i); setOrders(o); setDesserts(d); setSuppliers(s);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -202,7 +203,7 @@ export default function Inventory() {
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">{i.minimum_stock} {i.unit}</td>
                       <td className="px-4 py-3 tabular-nums">${(i.cost_per_unit || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 font-semibold tabular-nums">${((i.current_stock || 0) * (i.cost_per_unit || 0)).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{i.supplier || "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{i.supplier_name || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
                           <button onClick={() => setEditItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
@@ -218,18 +219,18 @@ export default function Inventory() {
         )}
       </div>
 
-      <ItemDialog open={createOpen || !!editItem} item={editItem} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
+      <ItemDialog open={createOpen || !!editItem} item={editItem} suppliers={suppliers} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
     </div>
   );
 }
 
-function ItemDialog({ open, item, onClose, onSaved }) {
+function ItemDialog({ open, item, suppliers, onClose, onSaved }) {
   const isEdit = !!item;
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, supplier: "", cost_per_unit: 0, expiry_date: "" });
+    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, reorder_quantity: 0, supplier: "", cost_per_unit: 0, expiry_date: "" });
   }, [open, item]);
 
   if (!form) return null;
@@ -238,7 +239,15 @@ function ItemDialog({ open, item, onClose, onSaved }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const payload = { ...form, current_stock: Number(form.current_stock) || 0, minimum_stock: Number(form.minimum_stock) || 0, cost_per_unit: Number(form.cost_per_unit) || 0, expiry_date: form.expiry_date || null };
+      const payload = {
+        ...form,
+        current_stock: Number(form.current_stock) || 0,
+        minimum_stock: Number(form.minimum_stock) || 0,
+        reorder_quantity: Number(form.reorder_quantity) || 0,
+        cost_per_unit: Number(form.cost_per_unit) || 0,
+        expiry_date: form.expiry_date || null,
+        supplier: form.supplier || null,
+      };
       if (isEdit) await entities.InventoryItem.update(item.id, payload);
       else await entities.InventoryItem.create(payload);
       onSaved(); onClose();
@@ -265,9 +274,17 @@ function ItemDialog({ open, item, onClose, onSaved }) {
               </select>
             </div>
           </div>
-          <div><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => set("minimum_stock", e.target.value)} className="mt-1" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => set("minimum_stock", e.target.value)} className="mt-1" /></div>
+            <div><Label>Reorder Quantity</Label><Input type="number" value={form.reorder_quantity} onChange={(e) => set("reorder_quantity", e.target.value)} className="mt-1" placeholder="Target restock amount" /></div>
+          </div>
           <div><Label>Cost Per Unit ($)</Label><Input type="number" step="0.01" value={form.cost_per_unit} onChange={(e) => set("cost_per_unit", e.target.value)} className="mt-1" /></div>
-          <div><Label>Supplier</Label><Input value={form.supplier} onChange={(e) => set("supplier", e.target.value)} className="mt-1" /></div>
+          <div><Label>Supplier</Label>
+            <select value={form.supplier || ""} onChange={(e) => set("supplier", e.target.value ? Number(e.target.value) : "")} className="mt-1 w-full h-9 px-3 rounded-lg border border-input bg-card text-[13px]">
+              <option value="">No supplier</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
           <div><Label>Expiry Date</Label><Input type="date" value={form.expiry_date || ""} onChange={(e) => set("expiry_date", e.target.value)} className="mt-1" /></div>
         </div>
         <DialogFooter>

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Task
+from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Supplier, Task
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -10,7 +10,16 @@ class CustomerSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = "__all__"
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
 class InventoryItemSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
+
     class Meta:
         model = InventoryItem
         fields = "__all__"

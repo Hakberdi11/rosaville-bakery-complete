@@ -38,6 +38,23 @@ class Customer(models.Model):
         return self.name
 
 
+class Supplier(models.Model):
+    name = models.CharField(max_length=255)
+    contact_name = models.CharField(max_length=255, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class InventoryItem(models.Model):
     class Unit(models.TextChoices):
         KG = "kg", "kg"
@@ -51,7 +68,10 @@ class InventoryItem(models.Model):
     current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit = models.CharField(max_length=10, choices=Unit.choices, default=Unit.KG)
     minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    supplier = models.CharField(max_length=255, blank=True)
+    # Target "reorder up to" quantity, used to pre-fill Purchase Order suggestions
+    # from the Inventory page's "Reorder Now" action.
+    reorder_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="inventory_items")
     cost_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     category = models.CharField(max_length=100, default="Other")
     expiry_date = models.DateField(null=True, blank=True)

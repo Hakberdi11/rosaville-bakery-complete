@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsAdminOrManagerOrOwner, IsStaff
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Task
+from .models import Customer, Feedback, GiftCard, InventoryItem, Order, Supplier, Task
 from .serializers import (
     CustomerSerializer,
     FeedbackSerializer,
@@ -17,6 +17,7 @@ from .serializers import (
     InventoryItemSerializer,
     OrderSerializer,
     PublicOrderStatusSerializer,
+    SupplierSerializer,
     TaskSerializer,
 )
 
@@ -29,8 +30,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
     ordering_fields = "__all__"
 
 
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all()
+    serializer_class = SupplierSerializer
+    permission_classes = [IsStaff]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = "__all__"
+
+
 class InventoryItemViewSet(viewsets.ModelViewSet):
-    queryset = InventoryItem.objects.all()
+    queryset = InventoryItem.objects.select_related("supplier").all()
     serializer_class = InventoryItemSerializer
     permission_classes = [IsStaff]
     filter_backends = [filters.OrderingFilter]

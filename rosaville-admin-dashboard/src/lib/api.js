@@ -93,6 +93,7 @@ export const entities = {
   TeamMember: makeResource("team-members"),
   CustomCakeOrder: makeResource("custom-cake-orders"),
   GiftCard: makeResource("gift-cards"),
+  Supplier: makeResource("suppliers"),
 };
 
 export async function lookupGiftCard(code) {
