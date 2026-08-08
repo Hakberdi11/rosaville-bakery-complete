@@ -24,7 +24,10 @@ export function convertUnit(quantity, from, to) {
 export function calculateOrderIngredients(order, desserts) {
   const consumption = {};
   for (const item of order.items || []) {
-    const dessert = desserts.find((d) => d.id === item.dessert_id);
+    // dessert_id on stored order items is often a string (HTML <select> values
+    // are always strings) while Dessert.id comes back as a number from the API —
+    // compare loosely so ingredient consumption isn't silently dropped.
+    const dessert = desserts.find((d) => String(d.id) === String(item.dessert_id));
     if (!dessert) continue;
     const size = (dessert.sizes || []).find((s) => s.label === item.size);
     let ingredients = dessert.ingredients || [];
@@ -52,7 +55,7 @@ export function calculateProjectedStock(inventory, orders, desserts) {
   for (const order of activeOrders) {
     const cons = calculateOrderIngredients(order, desserts);
     for (const [id, c] of Object.entries(cons)) {
-      const item = inventory.find((i) => i.id === id);
+      const item = inventory.find((i) => String(i.id) === String(id));
       const converted = convertUnit(c.quantity, c.unit, item?.unit);
       totalConsumption[id] = (totalConsumption[id] || 0) + converted;
     }
@@ -67,12 +70,29 @@ export function calculateProjectedStock(inventory, orders, desserts) {
   });
 }
 
+// Total ingredient (COGS) cost across a list of orders, reusing the same
+// size-aware consumption logic as calculateProjectedStock — used for the
+// Reports page's monthly gross-margin figure.
+export function calculateOrdersCOGS(orders, desserts, inventory) {
+  let totalCost = 0;
+  for (const order of orders) {
+    const cons = calculateOrderIngredients(order, desserts);
+    for (const [id, c] of Object.entries(cons)) {
+      const item = inventory.find((i) => String(i.id) === String(id));
+      if (!item) continue;
+      const converted = convertUnit(c.quantity, c.unit, item.unit);
+      totalCost += converted * (item.cost_per_unit || 0);
+    }
+  }
+  return totalCost;
+}
+
 // Aggregates ingredient needs across a list of orders (for the order composer preview).
 export function summarizeIngredients(items, desserts, inventory) {
   const pseudo = { items };
   const cons = calculateOrderIngredients(pseudo, desserts);
   return Object.entries(cons).map(([id, c]) => {
-    const item = inventory.find((i) => i.id === id);
+    const item = inventory.find((i) => String(i.id) === String(id));
     const converted = convertUnit(c.quantity, c.unit, item?.unit);
     return {
       inventory_item_id: id,
