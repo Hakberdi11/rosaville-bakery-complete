@@ -85,11 +85,11 @@ class InventoryItem(models.Model):
     def __str__(self):
         return self.name
 
-    def apply_stock_movement(self, *, movement_type, quantity_delta, reason="", related_order=None, created_by=None):
+    def apply_stock_movement(self, *, movement_type, quantity_delta, reason="", related_order=None, related_purchase_order=None, created_by=None):
         """The only sanctioned way current_stock changes after creation —
         an atomic F()-update plus a StockMovement audit row, in one transaction.
-        Called from InventoryItemViewSet.adjust and order-fulfillment
-        auto-deduction — never a raw field write."""
+        Called from InventoryItemViewSet.adjust, PurchaseOrderViewSet.receive,
+        and order-fulfillment auto-deduction — never a raw field write."""
         from django.db import transaction
 
         with transaction.atomic():
@@ -101,9 +101,54 @@ class InventoryItem(models.Model):
                 quantity_delta=quantity_delta,
                 reason=reason,
                 related_order=related_order,
+                related_purchase_order=related_purchase_order,
                 created_by=created_by,
             )
         return self
+
+
+class PurchaseOrder(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "Draft", "Draft"
+        SENT = "Sent", "Sent"
+        PARTIALLY_RECEIVED = "Partially Received", "Partially Received"
+        RECEIVED = "Received", "Received"
+        CANCELLED = "Cancelled", "Cancelled"
+
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="purchase_orders")
+    reference = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    ordered_date = models.DateField(null=True, blank=True)
+    expected_date = models.DateField(null=True, blank=True)
+    received_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = f"PO-{random.randint(100000, 999999)}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.reference
+
+
+class PurchaseOrderLine(models.Model):
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
+    # PROTECT, not CASCADE/SET_NULL: an inventory item with purchase-order
+    # history shouldn't be deletable out from under that audit trail.
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name="purchase_order_lines")
+    quantity_ordered = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity_received = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.inventory_item.name} × {self.quantity_ordered}"
 
 
 class StockMovement(models.Model):
@@ -121,7 +166,9 @@ class StockMovement(models.Model):
     related_order = models.ForeignKey(
         "Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
     )
-    # related_purchase_order FK is added in a later migration once PurchaseOrder exists.
+    related_purchase_order = models.ForeignKey(
+        PurchaseOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
     )

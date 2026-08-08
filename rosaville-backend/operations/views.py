@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -9,7 +10,18 @@ from rest_framework.response import Response
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsAdminOrManagerOrOwner, IsStaff
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, StockMovement, Supplier, Task
+from .models import (
+    Customer,
+    Feedback,
+    GiftCard,
+    InventoryItem,
+    Order,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    StockMovement,
+    Supplier,
+    Task,
+)
 from .serializers import (
     CustomerSerializer,
     FeedbackSerializer,
@@ -17,6 +29,7 @@ from .serializers import (
     InventoryItemSerializer,
     OrderSerializer,
     PublicOrderStatusSerializer,
+    PurchaseOrderSerializer,
     StockMovementSerializer,
     SupplierSerializer,
     TaskSerializer,
@@ -78,6 +91,70 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
         if item_id:
             qs = qs.filter(inventory_item_id=item_id)
         return qs
+
+
+class PurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("lines__inventory_item").all()
+    serializer_class = PurchaseOrderSerializer
+    permission_classes = [IsStaff]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = "__all__"
+
+    def update(self, request, *args, **kwargs):
+        po = self.get_object()
+        if "lines" in request.data and po.status not in (PurchaseOrder.Status.DRAFT, PurchaseOrder.Status.SENT):
+            raise ValidationError({"lines": "Cannot edit line items once receiving has started."})
+        return super().update(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def receive(self, request, pk=None):
+        po = self.get_object()
+        if po.status == PurchaseOrder.Status.CANCELLED:
+            return Response({"detail": "Cannot receive a cancelled purchase order."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            incoming = {int(line["line_id"]): Decimal(str(line["quantity_received"])) for line in request.data.get("lines", [])}
+        except (KeyError, TypeError, ValueError):
+            return Response({"detail": "lines must be [{line_id, quantity_received}]"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Query PurchaseOrderLine directly rather than through po.lines — the
+        # viewset's queryset prefetches lines__inventory_item, and po (from
+        # self.get_object()) carries that prefetch cache; po.lines.all() would
+        # keep returning the pre-mutation snapshot for the rest of this request.
+        lines_by_id = {line.id: line for line in PurchaseOrderLine.objects.filter(purchase_order=po).select_related("inventory_item")}
+        user = request.user if request.user.is_authenticated else None
+
+        with transaction.atomic():
+            for line_id, received_now in incoming.items():
+                line = lines_by_id.get(line_id)
+                if not line or received_now <= 0:
+                    continue
+                new_total = min(line.quantity_received + received_now, line.quantity_ordered)
+                actual_delta = new_total - line.quantity_received
+                if actual_delta <= 0:
+                    continue
+                line.quantity_received = new_total
+                line.save(update_fields=["quantity_received"])
+                line.inventory_item.apply_stock_movement(
+                    movement_type=StockMovement.MovementType.RECEIVED,
+                    quantity_delta=actual_delta,
+                    related_purchase_order=po,
+                    created_by=user,
+                )
+
+            all_lines = list(PurchaseOrderLine.objects.filter(purchase_order=po))
+            fully_received = all(line.quantity_received >= line.quantity_ordered for line in all_lines)
+            any_received = any(line.quantity_received > 0 for line in all_lines)
+            if fully_received:
+                po.status = PurchaseOrder.Status.RECEIVED
+                po.received_date = timezone.now().date()
+            elif any_received:
+                po.status = PurchaseOrder.Status.PARTIALLY_RECEIVED
+            po.save(update_fields=["status", "received_date", "updated_at"])
+
+        # Re-fetch with a fresh prefetch cache so the response reflects this
+        # request's mutations, not the stale snapshot from self.get_object().
+        po = self.get_queryset().get(pk=po.pk)
+        return Response(self.get_serializer(po).data)
 
 
 class OrderViewSet(viewsets.ModelViewSet):

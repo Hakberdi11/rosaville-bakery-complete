@@ -1,6 +1,17 @@
 from rest_framework import serializers
 
-from .models import Customer, Feedback, GiftCard, InventoryItem, Order, StockMovement, Supplier, Task
+from .models import (
+    Customer,
+    Feedback,
+    GiftCard,
+    InventoryItem,
+    Order,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    StockMovement,
+    Supplier,
+    Task,
+)
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -43,6 +54,43 @@ class StockMovementSerializer(serializers.ModelSerializer):
         model = StockMovement
         fields = "__all__"
         read_only_fields = ["id", "created_at"]
+
+
+class PurchaseOrderLineSerializer(serializers.ModelSerializer):
+    inventory_item_name = serializers.CharField(source="inventory_item.name", read_only=True)
+    unit = serializers.CharField(source="inventory_item.unit", read_only=True)
+
+    class Meta:
+        model = PurchaseOrderLine
+        fields = ["id", "inventory_item", "inventory_item_name", "unit", "quantity_ordered", "quantity_received", "unit_cost"]
+        read_only_fields = ["id", "quantity_received"]
+
+
+class PurchaseOrderSerializer(serializers.ModelSerializer):
+    lines = PurchaseOrderLineSerializer(many=True)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
+
+    class Meta:
+        model = PurchaseOrder
+        fields = "__all__"
+        read_only_fields = ["id", "reference", "received_date", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop("lines")
+        po = PurchaseOrder.objects.create(**validated_data)
+        PurchaseOrderLine.objects.bulk_create([PurchaseOrderLine(purchase_order=po, **line) for line in lines_data])
+        return po
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        instance = super().update(instance, validated_data)
+        if lines_data is not None:
+            # Replaces the whole line set — the view only allows this while
+            # status is Draft/Sent (see PurchaseOrderViewSet.update), before
+            # any quantity_received data would be destroyed by it.
+            instance.lines.all().delete()
+            PurchaseOrderLine.objects.bulk_create([PurchaseOrderLine(purchase_order=instance, **line) for line in lines_data])
+        return instance
 
 
 class OrderSerializer(serializers.ModelSerializer):

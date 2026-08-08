@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { entities, adjustInventoryStock } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History } from "lucide-react";
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History, ShoppingCart } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ function daysUntil(dateStr) {
 }
 
 export default function Inventory() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [orders, setOrders] = useState([]);
   const [desserts, setDesserts] = useState([]);
@@ -212,6 +214,9 @@ export default function Inventory() {
                       <td className="px-4 py-3 text-muted-foreground">{i.supplier_name || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
+                          {isLow && (
+                            <button onClick={() => navigate(`/purchase-orders?prefill_item=${i.id}`)} className="w-7 h-7 rounded-lg hover:bg-amber-50 flex items-center justify-center" title="Reorder Now"><ShoppingCart className="w-3.5 h-3.5 text-amber-600" /></button>
+                          )}
                           <button onClick={() => setHistoryItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center" title="Stock History"><History className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => setEditItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => remove(i)} className="w-7 h-7 rounded-lg hover:bg-rose-50 flex items-center justify-center"><Trash2 className="w-3.5 h-3.5 text-rose-500" /></button>

@@ -17,6 +17,7 @@ import Desserts from '@/pages/Desserts';
 import SpecialOfMonth from '@/pages/SpecialOfMonth';
 import Inventory from '@/pages/Inventory';
 import Suppliers from '@/pages/Suppliers';
+import PurchaseOrders from '@/pages/PurchaseOrders';
 import Reports from '@/pages/Reports';
 import Analytics from '@/pages/Analytics';
 import ContactRequests from '@/pages/ContactRequests';
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
           <Route path="/special-of-month" element={<SpecialOfMonth />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/purchase-orders" element={<PurchaseOrders />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/contact" element={<ContactRequests />} />
