@@ -89,7 +89,7 @@ export default function ContactRequests() {
                 <div className="text-[12.5px] text-foreground truncate">{r.subject || "No subject"}</div>
                 <div className="flex items-center justify-between mt-1.5 gap-2">
                   <span className="text-[11.5px] text-muted-foreground truncate">{r.email || "—"} · {r.source}</span>
-                  <span className="text-[11.5px] text-muted-foreground whitespace-nowrap">{r.created_date ? new Date(r.created_date).toLocaleDateString() : "—"}</span>
+                  <span className="text-[11.5px] text-muted-foreground whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
                 </div>
               </button>
             ))}
@@ -115,7 +115,7 @@ export default function ContactRequests() {
                     </td>
                     <td className="px-4 py-3">{r.subject || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{r.source}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{r.created_date ? new Date(r.created_date).toLocaleDateString() : "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-4 py-3 text-right text-muted-foreground">→</td>
                   </tr>

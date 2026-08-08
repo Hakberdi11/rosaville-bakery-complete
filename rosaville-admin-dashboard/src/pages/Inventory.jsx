@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { entities } from '@/lib/api';
-import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { entities, adjustInventoryStock } from '@/lib/api';
+import { Package, Plus, Search, Pencil, Trash2, AlertTriangle, TrendingDown, DollarSign, Eye, EyeOff, PackageX, Clock, History, ShoppingCart, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
@@ -8,39 +9,57 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { calculateProjectedStock } from "@/lib/ingredientCalc";
+import { calculateProjectedStock, calculateWasteRisk, UNITS } from "@/lib/ingredientCalc";
 
-const UNITS = ["kg", "g", "L", "ml", "pcs", "box"];
 const CATEGORIES = ["Flour & Grains", "Dairy", "Sugar & Sweeteners", "Chocolate", "Fruits", "Flavorings", "Packaging", "Other"];
+const EXPIRING_SOON_DAYS = 7;
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const ms = new Date(dateStr).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.round(ms / 86400000);
+}
 
 export default function Inventory() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [orders, setOrders] = useState([]);
   const [desserts, setDesserts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [showProjected, setShowProjected] = useState(false);
+  const [showWasteRisk, setShowWasteRisk] = useState(false);
+  const [historyItem, setHistoryItem] = useState(null);
+  const [stockTakeOpen, setStockTakeOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [i, o, d] = await Promise.all([
+      const [i, o, d, s] = await Promise.all([
         entities.InventoryItem.list("-created_date", 500),
         entities.Order.list("-created_date", 500),
         entities.Dessert.list("-display_order", 500),
+        entities.Supplier.list("name", 500),
       ]);
-      setItems(i); setOrders(o); setDesserts(d);
+      setItems(i); setOrders(o); setDesserts(d); setSuppliers(s);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
-  const enriched = useMemo(
-    () => showProjected ? calculateProjectedStock(items, orders, desserts) : items,
-    [showProjected, items, orders, desserts]
-  );
+  const wasteRiskById = useMemo(() => {
+    const map = {};
+    calculateWasteRisk(items, orders, desserts).forEach((w) => { map[w.id] = w; });
+    return map;
+  }, [items, orders, desserts]);
+
+  const enriched = useMemo(() => {
+    const base = showProjected ? calculateProjectedStock(items, orders, desserts) : items;
+    return base.map((it) => ({ ...it, ...wasteRiskById[it.id] }));
+  }, [showProjected, items, orders, desserts, wasteRiskById]);
 
   const filtered = useMemo(
     () => enriched.filter((i) => !search || i.name?.toLowerCase().includes(search.toLowerCase())),
@@ -50,6 +69,8 @@ export default function Inventory() {
   const lowStock = items.filter((i) => i.current_stock <= i.minimum_stock);
   const totalValue = items.reduce((s, i) => s + (i.current_stock || 0) * (i.cost_per_unit || 0), 0);
   const shortfallCount = showProjected ? enriched.filter((i) => i.projected_stock < i.minimum_stock).length : 0;
+  const overstockedCount = Object.values(wasteRiskById).filter((w) => w.overstocked).length;
+  const expiringSoonCount = items.filter((i) => { const d = daysUntil(i.expiry_date); return d !== null && d <= EXPIRING_SOON_DAYS; }).length;
 
   const remove = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return;
@@ -58,9 +79,13 @@ export default function Inventory() {
   };
 
   const adjustStock = async (item, delta) => {
-    const newStock = Math.max(0, (item.current_stock || 0) + delta);
-    await entities.InventoryItem.update(item.id, { current_stock: newStock });
-    setItems((p) => p.map((x) => (x.id === item.id ? { ...x, current_stock: newStock } : x)));
+    try {
+      const updated = await adjustInventoryStock(item.id, delta);
+      setItems((p) => p.map((x) => (x.id === item.id ? updated : x)));
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Could not adjust stock.");
+    }
   };
 
   return (
@@ -75,21 +100,35 @@ export default function Inventory() {
               {showProjected ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               {showProjected ? "Hide Projected" : "Show Projected Stock"}
             </Button>
+            <Button variant={showWasteRisk ? "default" : "outline"} size="sm" className="gap-2" onClick={() => setShowWasteRisk((v) => !v)}>
+              <PackageX className="w-4 h-4" />
+              {showWasteRisk ? "Hide Waste Risk" : "Show Waste Risk"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setStockTakeOpen(true)}>
+              <ClipboardCheck className="w-4 h-4" /> Start Stock Take
+            </Button>
             <Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Add Item</Button>
           </>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="Total Items" value={items.length} icon={Package} accent="blue" />
         <StatCard label="Inventory Value" value={`$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={DollarSign} accent="emerald" />
         <StatCard label="Low Stock Alerts" value={lowStock.length} icon={AlertTriangle} accent={lowStock.length ? "rose" : "default"} />
         <StatCard label={showProjected ? "Projected Shortfalls" : "Out of Stock"} value={showProjected ? shortfallCount : items.filter((i) => i.current_stock <= 0).length} icon={TrendingDown} accent={showProjected && shortfallCount ? "rose" : "amber"} sub={showProjected ? "after active orders" : undefined} />
+        <StatCard label="Expiring Soon" value={expiringSoonCount} icon={Clock} accent={expiringSoonCount ? "amber" : "default"} sub={`within ${EXPIRING_SOON_DAYS}d`} />
       </div>
 
       {showProjected && (
         <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-2.5 mb-4 text-[12.5px] text-blue-700 dark:text-blue-300">
           Showing <strong>projected stock</strong> = current stock minus ingredients needed for all active orders (Pending → Ready).
+        </div>
+      )}
+
+      {showWasteRisk && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-2.5 mb-4 text-[12.5px] text-violet-700 dark:text-violet-300">
+          Showing <strong>weeks of supply</strong> = current stock ÷ average weekly usage over the last 4 weeks. Items stocked beyond 6 weeks of actual demand are flagged as overstocked ({overstockedCount} found) — items with no recent sales history aren't flagged, since that's a different signal than over-ordering.
         </div>
       )}
 
@@ -113,6 +152,7 @@ export default function Inventory() {
                   <th className="px-4 py-3 font-medium">Current Stock</th>
                   {showProjected && <th className="px-4 py-3 font-medium">Predicted Usage</th>}
                   {showProjected && <th className="px-4 py-3 font-medium">Projected Stock</th>}
+                  {showWasteRisk && <th className="px-4 py-3 font-medium">Weeks of Supply</th>}
                   <th className="px-4 py-3 font-medium">Min</th>
                   <th className="px-4 py-3 font-medium">Cost/Unit</th>
                   <th className="px-4 py-3 font-medium">Value</th>
@@ -126,12 +166,22 @@ export default function Inventory() {
                   const isOut = i.current_stock <= 0;
                   const projectedLow = showProjected && i.projected_stock < i.minimum_stock;
                   const projectedOut = showProjected && i.projected_stock <= 0;
+                  const expiryDays = daysUntil(i.expiry_date);
+                  const isExpired = expiryDays !== null && expiryDays < 0;
+                  const isExpiringSoon = expiryDays !== null && expiryDays >= 0 && expiryDays <= EXPIRING_SOON_DAYS;
                   return (
                     <tr key={i.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <div className={cn("w-2 h-2 rounded-full", projectedOut ? "bg-rose-600" : projectedLow ? "bg-amber-500" : isOut ? "bg-rose-500" : isLow ? "bg-amber-500" : "bg-emerald-500")} />
                           <span className="font-medium">{i.name}</span>
+                          {(isExpired || isExpiringSoon) && (
+                            <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold",
+                              isExpired ? "bg-rose-500/12 text-rose-600 dark:text-rose-400" : "bg-amber-500/12 text-amber-600 dark:text-amber-400")}>
+                              <Clock className="w-3 h-3" />
+                              {isExpired ? "Expired" : expiryDays === 0 ? "Expires today" : `Expires in ${expiryDays}d`}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{i.category}</td>
@@ -150,12 +200,28 @@ export default function Inventory() {
                           </span>
                         </td>
                       )}
+                      {showWasteRisk && (
+                        <td className="px-4 py-3">
+                          {i.weeks_of_supply === null || i.weeks_of_supply === undefined ? (
+                            <span className="text-muted-foreground">No recent sales</span>
+                          ) : (
+                            <span className={cn("font-semibold tabular-nums flex items-center gap-1", i.overstocked ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground")}>
+                              {i.overstocked && <PackageX className="w-3.5 h-3.5" />}
+                              {i.weeks_of_supply.toFixed(1)} wks
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">{i.minimum_stock} {i.unit}</td>
                       <td className="px-4 py-3 tabular-nums">${(i.cost_per_unit || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 font-semibold tabular-nums">${((i.current_stock || 0) * (i.cost_per_unit || 0)).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{i.supplier || "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{i.supplier_name || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
+                          {isLow && (
+                            <button onClick={() => navigate(`/purchase-orders?prefill_item=${i.id}`)} className="w-7 h-7 rounded-lg hover:bg-amber-50 flex items-center justify-center" title="Reorder Now"><ShoppingCart className="w-3.5 h-3.5 text-amber-600" /></button>
+                          )}
+                          <button onClick={() => setHistoryItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center" title="Stock History"><History className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => setEditItem(i)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                           <button onClick={() => remove(i)} className="w-7 h-7 rounded-lg hover:bg-rose-50 flex items-center justify-center"><Trash2 className="w-3.5 h-3.5 text-rose-500" /></button>
                         </div>
@@ -169,18 +235,183 @@ export default function Inventory() {
         )}
       </div>
 
-      <ItemDialog open={createOpen || !!editItem} item={editItem} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
+      <ItemDialog open={createOpen || !!editItem} item={editItem} suppliers={suppliers} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
+      <StockHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
+      {stockTakeOpen && <StockTakeDialog items={items} onClose={() => setStockTakeOpen(false)} onDone={load} />}
     </div>
   );
 }
 
-function ItemDialog({ open, item, onClose, onSaved }) {
+const VARIANCE_FLAG_THRESHOLD = 0.02; // 2%, per industry rule of thumb for healthy inventory variance
+
+function StockTakeDialog({ items, onClose, onDone }) {
+  const [counts, setCounts] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [results, setResults] = useState({}); // { [itemId]: "ok" | "error" }
+  const [search, setSearch] = useState("");
+
+  const rows = useMemo(
+    () => items.filter((i) => !search || i.name?.toLowerCase().includes(search.toLowerCase())),
+    [items, search]
+  );
+
+  const setCount = (id, v) => setCounts((p) => ({ ...p, [id]: v }));
+
+  const varianceFor = (item) => {
+    const counted = counts[item.id];
+    if (counted === undefined || counted === "") return null;
+    const countedNum = Number(counted);
+    if (Number.isNaN(countedNum)) return null;
+    const delta = countedNum - Number(item.current_stock || 0);
+    const pct = item.current_stock ? delta / Number(item.current_stock) : (delta !== 0 ? 1 : 0);
+    return { delta, pct };
+  };
+
+  const changedCount = Object.entries(counts).filter(([, v]) => v !== "" && v !== undefined).length;
+
+  const submit = async () => {
+    const entries = items
+      .map((item) => ({ item, variance: varianceFor(item) }))
+      .filter(({ variance }) => variance && variance.delta !== 0);
+    if (entries.length === 0) { onClose(); return; }
+
+    setSubmitting(true);
+    const nextResults = {};
+    for (const { item, variance } of entries) {
+      try {
+        await adjustInventoryStock(item.id, variance.delta, { reason: "Stock take", movementType: "Stock Take Correction" });
+        nextResults[item.id] = "ok";
+      } catch (e) {
+        console.error(e);
+        nextResults[item.id] = "error";
+      }
+      setResults((p) => ({ ...p, [item.id]: nextResults[item.id] }));
+    }
+    setSubmitting(false);
+    onDone();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Stock Take</DialogTitle></DialogHeader>
+        <div className="py-2 space-y-3">
+          <p className="text-[12.5px] text-muted-foreground">
+            Enter the physically counted quantity for each item you're checking. Variances beyond ±{(VARIANCE_FLAG_THRESHOLD * 100).toFixed(0)}% are flagged. Only changed rows are submitted as corrections.
+          </p>
+          <div className="relative max-w-sm">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ingredients…" className="pl-9 h-9" />
+          </div>
+          <div className="rounded-xl border border-border/60 divide-y divide-border/40 max-h-[45vh] overflow-y-auto">
+            {rows.map((item) => {
+              const variance = varianceFor(item);
+              const flagged = variance && Math.abs(variance.pct) > VARIANCE_FLAG_THRESHOLD;
+              const result = results[item.id];
+              return (
+                <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-[13px] truncate">{item.name}</div>
+                    <div className="text-[11px] text-muted-foreground">System: {item.current_stock} {item.unit}</div>
+                  </div>
+                  <Input
+                    type="number" step="0.01" placeholder="Counted"
+                    value={counts[item.id] ?? ""}
+                    onChange={(e) => setCount(item.id, e.target.value)}
+                    className="h-9 w-24 text-[12.5px]"
+                    disabled={submitting}
+                  />
+                  <div className="w-24 text-right text-[11.5px]">
+                    {variance && variance.delta !== 0 && (
+                      <span className={cn("font-medium tabular-nums", flagged ? "text-rose-500" : "text-muted-foreground")}>
+                        {variance.delta > 0 ? "+" : ""}{variance.delta.toFixed(2)} ({(variance.pct * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-5 shrink-0">
+                    {result === "ok" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    {result === "error" && <XCircle className="w-4 h-4 text-rose-500" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button onClick={submit} disabled={submitting} className="bg-rose-600 hover:bg-rose-700">
+            {submitting ? "Submitting…" : changedCount > 0 ? `Submit Stock Take (${changedCount})` : "Close"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const MOVEMENT_COLORS = {
+  "Manual Adjustment": "text-muted-foreground",
+  "Received": "text-emerald-600 dark:text-emerald-400",
+  "Production Use": "text-amber-600 dark:text-amber-400",
+  "Waste/Spoilage": "text-rose-600 dark:text-rose-400",
+  "Stock Take Correction": "text-violet-600 dark:text-violet-400",
+};
+
+function StockHistoryDialog({ item, onClose }) {
+  const [movements, setMovements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!item) return;
+    setLoading(true);
+    entities.StockMovement.list("-created_date", 500)
+      .then((rows) => setMovements(rows.filter((m) => String(m.inventory_item) === String(item.id))))
+      .catch((e) => console.error(e))
+      .finally(() => setLoading(false));
+  }, [item]);
+
+  return (
+    <Dialog open={!!item} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Stock History — {item?.name}</DialogTitle></DialogHeader>
+        <div className="py-2">
+          {loading ? (
+            <div className="p-8 flex justify-center"><div className="w-6 h-6 border-4 border-border border-t-primary rounded-full animate-spin" /></div>
+          ) : movements.length === 0 ? (
+            <p className="text-[12.5px] text-muted-foreground italic py-4 text-center">No stock movements recorded yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {movements.map((m) => (
+                <div key={m.id} className="rounded-lg border border-border/60 px-3 py-2 flex items-center justify-between gap-3 text-[12.5px]">
+                  <div className="min-w-0">
+                    <div className={cn("font-medium", MOVEMENT_COLORS[m.movement_type] || "")}>{m.movement_type}</div>
+                    {m.reason && <div className="text-muted-foreground truncate">{m.reason}</div>}
+                    <div className="text-[11px] text-muted-foreground">
+                      {new Date(m.created_at).toLocaleString()}{m.created_by_name ? ` · ${m.created_by_name}` : ""}
+                    </div>
+                  </div>
+                  <span className={cn("font-semibold tabular-nums whitespace-nowrap", Number(m.quantity_delta) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500")}>
+                    {Number(m.quantity_delta) >= 0 ? "+" : ""}{Number(m.quantity_delta).toFixed(2)} {item?.unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ItemDialog({ open, item, suppliers, onClose, onSaved }) {
   const isEdit = !!item;
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, supplier: "", cost_per_unit: 0 });
+    if (open) setForm(item || { name: "", category: "Other", current_stock: 0, unit: "kg", minimum_stock: 0, reorder_quantity: 0, supplier: "", cost_per_unit: 0, expiry_date: "" });
   }, [open, item]);
 
   if (!form) return null;
@@ -189,7 +420,15 @@ function ItemDialog({ open, item, onClose, onSaved }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const payload = { ...form, current_stock: Number(form.current_stock) || 0, minimum_stock: Number(form.minimum_stock) || 0, cost_per_unit: Number(form.cost_per_unit) || 0 };
+      const payload = {
+        ...form,
+        current_stock: Number(form.current_stock) || 0,
+        minimum_stock: Number(form.minimum_stock) || 0,
+        reorder_quantity: Number(form.reorder_quantity) || 0,
+        cost_per_unit: Number(form.cost_per_unit) || 0,
+        expiry_date: form.expiry_date || null,
+        supplier: form.supplier || null,
+      };
       if (isEdit) await entities.InventoryItem.update(item.id, payload);
       else await entities.InventoryItem.create(payload);
       onSaved(); onClose();
@@ -216,9 +455,18 @@ function ItemDialog({ open, item, onClose, onSaved }) {
               </select>
             </div>
           </div>
-          <div><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => set("minimum_stock", e.target.value)} className="mt-1" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => set("minimum_stock", e.target.value)} className="mt-1" /></div>
+            <div><Label>Reorder Quantity</Label><Input type="number" value={form.reorder_quantity} onChange={(e) => set("reorder_quantity", e.target.value)} className="mt-1" placeholder="Target restock amount" /></div>
+          </div>
           <div><Label>Cost Per Unit ($)</Label><Input type="number" step="0.01" value={form.cost_per_unit} onChange={(e) => set("cost_per_unit", e.target.value)} className="mt-1" /></div>
-          <div><Label>Supplier</Label><Input value={form.supplier} onChange={(e) => set("supplier", e.target.value)} className="mt-1" /></div>
+          <div><Label>Supplier</Label>
+            <select value={form.supplier || ""} onChange={(e) => set("supplier", e.target.value ? Number(e.target.value) : "")} className="mt-1 w-full h-9 px-3 rounded-lg border border-input bg-card text-[13px]">
+              <option value="">No supplier</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div><Label>Expiry Date</Label><Input type="date" value={form.expiry_date || ""} onChange={(e) => set("expiry_date", e.target.value)} className="mt-1" /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

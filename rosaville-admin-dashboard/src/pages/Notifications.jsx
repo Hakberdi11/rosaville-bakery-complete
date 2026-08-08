@@ -19,10 +19,10 @@ export default function Notifications() {
           entities.Task.list("-created_date", 50),
         ]);
         const events = [];
-        orders.forEach((o) => events.push({ id: "o" + o.id, type: "order", icon: ShoppingBag, color: "blue", title: `New order ${o.order_number || ""} from ${o.customer_name}`, sub: `$${(o.total_value || 0).toFixed(0)} · ${o.status}`, date: o.created_date }));
-        feedback.forEach((f) => events.push({ id: "f" + f.id, type: "feedback", icon: Star, color: "amber", title: `${f.rating}★ review from ${f.customer_name}`, sub: f.dessert_name || f.message?.slice(0, 60), date: f.created_date }));
-        contacts.filter((c) => c.status === "New").forEach((c) => events.push({ id: "c" + c.id, type: "contact", icon: Inbox, color: "violet", title: `New inquiry from ${c.name}`, sub: c.subject || c.message?.slice(0, 60), date: c.created_date }));
-        inventory.filter((i) => i.current_stock <= i.minimum_stock).forEach((i) => events.push({ id: "i" + i.id, type: "stock", icon: AlertTriangle, color: "rose", title: `Low stock: ${i.name}`, sub: `${i.current_stock} ${i.unit} left (min ${i.minimum_stock})`, date: i.updated_date || i.created_date }));
+        orders.forEach((o) => events.push({ id: "o" + o.id, type: "order", icon: ShoppingBag, color: "blue", title: `New order ${o.order_number || ""} from ${o.customer_name}`, sub: `$${(o.total_value || 0).toFixed(0)} · ${o.status}`, date: o.created_at }));
+        feedback.forEach((f) => events.push({ id: "f" + f.id, type: "feedback", icon: Star, color: "amber", title: `${f.rating}★ review from ${f.customer_name}`, sub: f.dessert_name || f.message?.slice(0, 60), date: f.created_at }));
+        contacts.filter((c) => c.status === "New").forEach((c) => events.push({ id: "c" + c.id, type: "contact", icon: Inbox, color: "violet", title: `New inquiry from ${c.name}`, sub: c.subject || c.message?.slice(0, 60), date: c.created_at }));
+        inventory.filter((i) => i.current_stock <= i.minimum_stock).forEach((i) => events.push({ id: "i" + i.id, type: "stock", icon: AlertTriangle, color: "rose", title: `Low stock: ${i.name}`, sub: `${i.current_stock} ${i.unit} left (min ${i.minimum_stock})`, date: i.updated_at || i.created_at }));
         tasks.filter((t) => t.status !== "Completed" && t.due_date).forEach((t) => {
           const due = new Date(t.due_date);
           const soon = (due - new Date()) / 86400000 <= 3;

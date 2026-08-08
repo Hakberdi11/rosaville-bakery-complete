@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, ShoppingBag, Users, Cake, Image, FileText, Inbox,
   Package, Factory, ChefHat, Megaphone, UserCog, ListTodo,
   Bell, FileBarChart, Settings, ScrollText, TrendingUp, Moon, Sun,
-  Menu, Search, LogOut, Sparkles, Users2
+  Menu, Search, LogOut, Sparkles, Users2, Gift, Truck, ClipboardList
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { entities } from "@/lib/api";
 import { StatusBadge } from "@/components/admin/PageHeader";
+import usePolling from "@/hooks/use-polling";
 
 // Roles: admin (full), manager (operations), employee (tasks + production only)
 const navGroups = [
@@ -27,6 +28,8 @@ const navGroups = [
     label: "Sales",
     items: [
       { label: "Orders", path: "/orders", icon: ShoppingBag, roles: ["admin", "manager"] },
+      { label: "Custom Cake Orders", path: "/custom-cake-orders", icon: Cake, roles: ["admin", "manager"] },
+      { label: "Gift Cards", path: "/gift-cards", icon: Gift, roles: ["admin", "manager"] },
       { label: "Customers", path: "/customers", icon: Users, roles: ["admin", "manager"] },
       { label: "Contact Requests", path: "/contact", icon: Inbox, roles: ["admin", "manager"] },
     ],
@@ -43,6 +46,8 @@ const navGroups = [
     label: "Operations",
     items: [
       { label: "Inventory", path: "/inventory", icon: Package, roles: ["admin", "manager"] },
+      { label: "Suppliers", path: "/suppliers", icon: Truck, roles: ["admin", "manager"] },
+      { label: "Purchase Orders", path: "/purchase-orders", icon: ClipboardList, roles: ["admin", "manager"] },
       { label: "Production", path: "/production", icon: Factory, roles: ["admin", "manager", "employee"] },
       { label: "Recipes", path: "/recipes", icon: ChefHat, roles: ["admin", "manager"] },
     ],
@@ -103,9 +108,39 @@ function timeAgo(dateStr) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// No backend notification/read-state model exists, so there's no real
+// "unread count" to show. Instead the bell dot reflects whether there's
+// any actual attention-worthy state right now (mirrors Notifications.jsx's
+// own event conditions) rather than always showing on regardless of data.
+function useHasAlerts() {
+  const [hasAlerts, setHasAlerts] = useState(false);
+
+  const check = () => {
+    Promise.all([
+      entities.InventoryItem.list("-created_date", 500),
+      entities.ContactRequest.list("-created_date", 20),
+      entities.Order.list("-created_date", 20),
+    ])
+      .then(([inventory, contacts, orders]) => {
+        const lowStock = inventory.some((i) => i.current_stock <= i.minimum_stock);
+        const newContacts = contacts.some((c) => c.status === "New");
+        const recentOrder = orders.some((o) => o.created_at && Date.now() - new Date(o.created_at).getTime() <= 86400000);
+        setHasAlerts(lowStock || newContacts || recentOrder);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => { check(); }, []);
+  usePolling(check, 30000);
+
+  return hasAlerts;
+}
+
 function RecentOrderWidget() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const load = () => entities.Order.list("-created_date", 1).then((orders) => setOrder(orders[0] || null)).catch(() => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +150,9 @@ function RecentOrderWidget() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+  // Mounted on every page via Layout — polling here surfaces new orders
+  // app-wide without needing a manual refresh.
+  usePolling(load, 15000);
 
   if (loading || !order) return null;
 
@@ -188,11 +226,106 @@ function SidebarContent({ role, onNavigate }) {
   );
 }
 
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const runSearch = async (q) => {
+    if (!q.trim()) { setResults(null); return; }
+    setLoading(true);
+    try {
+      const [orders, customers, desserts] = await Promise.all([
+        entities.Order.list("-created_date", 200),
+        entities.Customer.list("-created_date", 200),
+        entities.Dessert.list("-display_order", 200),
+      ]);
+      const term = q.toLowerCase();
+      setResults({
+        orders: orders.filter((o) => o.customer_name?.toLowerCase().includes(term) || o.order_number?.toLowerCase().includes(term) || o.email?.toLowerCase().includes(term)).slice(0, 5),
+        customers: customers.filter((c) => c.name?.toLowerCase().includes(term) || c.email?.toLowerCase().includes(term)).slice(0, 5),
+        desserts: desserts.filter((d) => d.name?.toLowerCase().includes(term)).slice(0, 5),
+      });
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    const id = setTimeout(() => runSearch(query), 250);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const goTo = (path) => {
+    setQuery("");
+    setResults(null);
+    navigate(path);
+  };
+
+  const hasResults = results && (results.orders.length || results.customers.length || results.desserts.length);
+
+  return (
+    <div className="relative w-full">
+      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onBlur={() => setTimeout(() => setResults(null), 150)}
+        placeholder="Search orders, customers, products…"
+        className="w-full h-9 pl-9 pr-3 rounded-lg bg-muted/60 text-[13px] outline-none focus:bg-muted focus:ring-2 focus:ring-ring/40 transition"
+      />
+      {query.trim() && results && (
+        <div className="absolute top-11 left-0 w-full max-w-md rounded-xl border border-border/60 bg-card shadow-lg z-40 max-h-96 overflow-y-auto">
+          {loading ? (
+            <div className="p-4 text-[12.5px] text-muted-foreground text-center">Searching…</div>
+          ) : !hasResults ? (
+            <div className="p-4 text-[12.5px] text-muted-foreground text-center">No matches for "{query}"</div>
+          ) : (
+            <div className="py-1.5">
+              {results.orders.length > 0 && (
+                <div>
+                  <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">Orders</div>
+                  {results.orders.map((o) => (
+                    <button key={o.id} onMouseDown={() => goTo("/orders")} className="w-full text-left px-3 py-2 text-[13px] hover:bg-muted/50">
+                      {o.order_number || `#${String(o.id).slice(-6)}`} — {o.customer_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {results.customers.length > 0 && (
+                <div>
+                  <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">Customers</div>
+                  {results.customers.map((c) => (
+                    <button key={c.id} onMouseDown={() => goTo("/customers")} className="w-full text-left px-3 py-2 text-[13px] hover:bg-muted/50">
+                      {c.name} {c.email ? `— ${c.email}` : ""}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {results.desserts.length > 0 && (
+                <div>
+                  <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">Desserts</div>
+                  {results.desserts.map((d) => (
+                    <button key={d.id} onMouseDown={() => goTo("/desserts")} className="w-full text-left px-3 py-2 text-[13px] hover:bg-muted/50">
+                      {d.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { dark, toggle } = useDarkMode();
   const { user, logout } = useAuth();
   const location = useLocation();
+  const hasAlerts = useHasAlerts();
   const role = normalizeRole(user?.role);
   const roleLabel = role === "admin" ? "Admin" : role === "manager" ? "Manager" : "Employee";
   const initials = (user?.full_name || user?.email || "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
@@ -228,13 +361,7 @@ export default function Layout() {
             <Menu className="w-5 h-5" />
           </Button>
           <div className="hidden md:flex items-center gap-2 flex-1 max-w-md">
-            <div className="relative w-full">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                placeholder="Search orders, customers, products…"
-                className="w-full h-9 pl-9 pr-3 rounded-lg bg-muted/60 text-[13px] outline-none focus:bg-muted focus:ring-2 focus:ring-ring/40 transition"
-              />
-            </div>
+            <GlobalSearch />
           </div>
           <div className="flex-1 md:hidden" />
           <div className="flex items-center gap-1.5">
@@ -243,7 +370,7 @@ export default function Layout() {
             </Button>
             <Button variant="ghost" size="icon" className="relative" onClick={() => (window.location.href = "/notifications")}>
               <Bell className="w-[18px] h-[18px]" />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500" />
+              {hasAlerts && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500" />}
             </Button>
             <div className="w-px h-6 bg-border mx-1.5 hidden sm:block" />
             <div className="flex items-center gap-2.5 pl-1">

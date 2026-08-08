@@ -28,7 +28,7 @@ export default function Checkout() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.orders.submit({
+      const order = await api.orders.submit({
         customer_name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -42,7 +42,7 @@ export default function Checkout() {
         total_value: total,
         internal_notes: formData.specialRequests,
       });
-      toast.success('Order placed successfully! We will contact you soon.');
+      toast.success(`Order ${order.order_number} placed! Save this number to track your order later.`, { duration: 8000 });
       clearCart();
       navigate('/');
     } catch {

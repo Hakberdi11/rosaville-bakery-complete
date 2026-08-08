@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { entities } from '@/lib/api';
-import { Users, Search, Plus, Mail, Phone, MapPin, ShoppingBag } from "lucide-react";
+import { Users, Search, Plus, Mail, Phone, MapPin, ShoppingBag, Star, Minus } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,6 +135,7 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
   const [notes, setNotes] = useState(customer.notes || "");
   const [segment, setSegment] = useState(customer.segment || "New");
   const [saving, setSaving] = useState(false);
+  const [adjustingPoints, setAdjustingPoints] = useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -144,6 +145,16 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
       onUpdated(updated);
     } catch (e) { console.error(e); }
     setSaving(false);
+  };
+
+  const adjustPoints = async (delta) => {
+    const next = Math.max(0, (customer.loyalty_points || 0) + delta);
+    setAdjustingPoints(true);
+    try {
+      const updated = await entities.Customer.update(customer.id, { loyalty_points: next });
+      onUpdated(updated);
+    } catch (e) { console.error(e); }
+    setAdjustingPoints(false);
   };
 
   return (
@@ -165,6 +176,20 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
             <div className="rounded-xl bg-muted/40 p-3 text-center"><div className="text-[11px] text-muted-foreground">Orders</div><div className="text-[18px] font-semibold mt-0.5">{customer.order_count || 0}</div></div>
             <div className="rounded-xl bg-muted/40 p-3 text-center"><div className="text-[11px] text-muted-foreground">Total Spend</div><div className="text-[18px] font-semibold mt-0.5">${(customer.total_spend || 0).toFixed(0)}</div></div>
             <div className="rounded-xl bg-muted/40 p-3 text-center"><div className="text-[11px] text-muted-foreground">Avg Order</div><div className="text-[18px] font-semibold mt-0.5">${(customer.average_order_value || 0).toFixed(0)}</div></div>
+          </div>
+
+          <div className="rounded-xl border border-border/60 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <div>
+                <div className="text-[11px] text-muted-foreground">Loyalty Points</div>
+                <div className="text-[16px] font-semibold">{customer.loyalty_points || 0}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button disabled={adjustingPoints} onClick={() => adjustPoints(-10)} className="w-7 h-7 rounded-lg border border-border hover:bg-muted flex items-center justify-center disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
+              <button disabled={adjustingPoints} onClick={() => adjustPoints(10)} className="w-7 h-7 rounded-lg border border-border hover:bg-muted flex items-center justify-center disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
+            </div>
           </div>
 
           <div className="space-y-1.5 text-[13px]">

@@ -4,9 +4,11 @@ import { FileBarChart, Download, Calendar } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { jsPDF } from "jspdf";
+import { calculateOrdersCOGS } from "@/lib/ingredientCalc";
 
 export default function Reports() {
   const [orders, setOrders] = useState([]);
+  const [desserts, setDesserts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [feedback, setFeedback] = useState([]);
@@ -19,13 +21,14 @@ export default function Reports() {
   useEffect(() => {
     (async () => {
       try {
-        const [o, c, i, f] = await Promise.all([
+        const [o, d, c, i, f] = await Promise.all([
           entities.Order.list("-created_date", 1000),
+          entities.Dessert.list("-display_order", 500),
           entities.Customer.list("-created_date", 500),
           entities.InventoryItem.list("-created_date", 500),
           entities.Feedback.list("-created_date", 500),
         ]);
-        setOrders(o); setCustomers(c); setInventory(i); setFeedback(f);
+        setOrders(o); setDesserts(d); setCustomers(c); setInventory(i); setFeedback(f);
       } catch (e) { console.error(e); }
       setLoading(false);
     })();
@@ -37,11 +40,11 @@ export default function Reports() {
     const d = new Date(dateStr);
     return d.getFullYear() === year && d.getMonth() + 1 === mon;
   };
-  const monthOrders = orders.filter((o) => inMonth(o.delivery_date) || inMonth(o.created_date));
+  const monthOrders = orders.filter((o) => inMonth(o.delivery_date) || inMonth(o.created_at));
   const monthRevenue = monthOrders.reduce((s, o) => s + (o.total_value || 0), 0);
   const completedOrders = monthOrders.filter((o) => ["Completed", "Delivered"].includes(o.status));
   const cancelledOrders = monthOrders.filter((o) => o.status === "Cancelled");
-  const monthFeedback = feedback.filter((f) => inMonth(f.created_date));
+  const monthFeedback = feedback.filter((f) => inMonth(f.created_at));
   const avgRating = monthFeedback.length
     ? (monthFeedback.reduce((s, f) => s + (f.rating || 0), 0) / monthFeedback.length).toFixed(1)
     : "—";
@@ -55,6 +58,10 @@ export default function Reports() {
 
   const lowStock = inventory.filter((i) => i.current_stock <= i.minimum_stock);
   const monthName = new Date(year, mon - 1, 1).toLocaleString("default", { month: "long" });
+
+  const monthCOGS = calculateOrdersCOGS(monthOrders, desserts, inventory);
+  const grossProfit = monthRevenue - monthCOGS;
+  const grossMarginPct = monthRevenue > 0 ? (grossProfit / monthRevenue) * 100 : 0;
 
   const generatePDF = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -106,6 +113,12 @@ export default function Reports() {
     row("Avg Order Value", monthOrders.length ? `$${(monthRevenue / monthOrders.length).toFixed(2)}` : "$0.00");
     y += 10;
 
+    section("Profitability");
+    row("Cost of Goods Sold", `$${monthCOGS.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+    row("Gross Profit", `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+    row("Gross Margin", `${grossMarginPct.toFixed(1)}%`);
+    y += 10;
+
     section("Top Selling Desserts");
     if (topDesserts.length === 0) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120, 120, 120);
@@ -124,7 +137,7 @@ export default function Reports() {
 
     section("Customer Insights");
     row("Total Customers", customers.length);
-    row("New This Month", customers.filter((c) => inMonth(c.created_date)).length);
+    row("New This Month", customers.filter((c) => inMonth(c.created_at)).length);
     row("VIP Customers", customers.filter((c) => c.segment === "VIP").length);
     y += 10;
 
@@ -210,6 +223,12 @@ export default function Reports() {
             <PreviewRow label="Avg Order Value" value={monthOrders.length ? `$${(monthRevenue / monthOrders.length).toFixed(2)}` : "$0.00"} />
           </ReportSection>
 
+          <ReportSection title="Profitability">
+            <PreviewRow label="Cost of Goods Sold" value={`$${monthCOGS.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+            <PreviewRow label="Gross Profit" value={`$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+            <PreviewRow label="Gross Margin" value={`${grossMarginPct.toFixed(1)}%`} />
+          </ReportSection>
+
           <ReportSection title="Top Selling Desserts">
             {topDesserts.length === 0 ? <p className="text-slate-400 text-[13px]">No sales recorded for this month.</p> : (
               <div className="space-y-1.5">
@@ -222,7 +241,7 @@ export default function Reports() {
 
           <ReportSection title="Customer Insights">
             <PreviewRow label="Total Customers" value={customers.length} />
-            <PreviewRow label="New This Month" value={customers.filter((c) => inMonth(c.created_date)).length} />
+            <PreviewRow label="New This Month" value={customers.filter((c) => inMonth(c.created_at)).length} />
             <PreviewRow label="VIP Customers" value={customers.filter((c) => c.segment === "VIP").length} />
           </ReportSection>
 

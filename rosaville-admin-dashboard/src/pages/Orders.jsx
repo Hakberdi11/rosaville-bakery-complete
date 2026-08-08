@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { entities } from '@/lib/api';
-import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2 } from "lucide-react";
+import usePolling from "@/hooks/use-polling";
+import { entities, lookupGiftCard } from '@/lib/api';
+import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2, Gift } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +23,8 @@ export default function Orders() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [o, d, i] = await Promise.all([
         entities.Order.list("-created_date", 500),
@@ -32,9 +33,12 @@ export default function Orders() {
       ]);
       setOrders(o); setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  // Poll for new/updated orders (e.g. a customer checkout, or another staff
+  // member's change) without requiring a manual page refresh.
+  usePolling(() => load(true), 15000);
 
   const filtered = useMemo(() => orders.filter((o) => {
     const matchSearch = !search ||
@@ -51,7 +55,36 @@ export default function Orders() {
     if (selected?.id === id) setSelected({ ...selected, status });
   };
 
+  const updateAmountPaid = async (id, amount_paid) => {
+    const updated = await entities.Order.update(id, { amount_paid });
+    setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
+    if (selected?.id === id) setSelected(updated);
+  };
+
   const totalValue = filtered.reduce((s, o) => s + (o.total_value || 0), 0);
+
+  const exportCsv = () => {
+    const headers = ["Order #", "Customer", "Email", "Delivery Date", "Total", "Payment Status", "Status"];
+    const rows = filtered.map((o) => [
+      o.order_number || `#${String(o.id).slice(-6)}`,
+      o.customer_name || "",
+      o.email || "",
+      o.delivery_date || "",
+      (o.total_value || 0).toFixed(2),
+      o.payment_status || "",
+      o.status || "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-5 lg:p-8 max-w-[1400px] mx-auto">
@@ -61,7 +94,7 @@ export default function Orders() {
         icon={ShoppingBag}
         actions={
           <>
-            <Button variant="outline" size="sm" className="gap-2"><Download className="w-4 h-4" /> Export</Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={exportCsv}><Download className="w-4 h-4" /> Export</Button>
             <Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> New Order</Button>
           </>
         }
@@ -146,7 +179,8 @@ export default function Orders() {
       {selected && (
         <OrderDetail order={selected} desserts={desserts} inventory={inventory}
           onClose={() => setSelected(null)}
-          onStatus={updateStatus} />
+          onStatus={updateStatus}
+          onAmountPaid={updateAmountPaid} />
       )}
 
       <CreateOrderDialog open={createOpen} desserts={desserts} inventory={inventory}
@@ -179,7 +213,11 @@ function IngredientSummary({ items, desserts, inventory }) {
   );
 }
 
-function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
+function OrderDetail({ order, desserts, inventory, onClose, onStatus, onAmountPaid }) {
+  const [amountPaidInput, setAmountPaidInput] = useState(String(order.amount_paid ?? 0));
+  useEffect(() => setAmountPaidInput(String(order.amount_paid ?? 0)), [order.id, order.amount_paid]);
+  const balanceDue = (Number(order.total_value) || 0) - (Number(order.amount_paid) || 0);
+
   return (
     <Dialog open={!!order} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
@@ -191,6 +229,32 @@ function OrderDetail({ order, desserts, inventory, onClose, onStatus }) {
             <div className="col-span-2"><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Address</div><div className="font-medium">{order.address || "—"}</div></div>
             <div><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Delivery Date</div><div className="font-medium">{order.delivery_date ? new Date(order.delivery_date).toLocaleDateString() : "—"}</div></div>
             <div><div className="text-[11px] text-muted-foreground uppercase mb-0.5">Total</div><div className="font-semibold text-[15px]">${(order.total_value || 0).toFixed(2)}</div></div>
+            {Number(order.gift_card_amount_applied) > 0 && (
+              <div className="col-span-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Gift className="w-3.5 h-3.5" /> ${Number(order.gift_card_amount_applied).toFixed(2)} applied from gift card {order.gift_card_code}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border/60 p-3 flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-[12px] mb-1 block">Amount Paid</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative w-28">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
+                  <Input type="number" step="0.01" min="0" value={amountPaidInput}
+                    onChange={(e) => setAmountPaidInput(e.target.value)}
+                    onBlur={(e) => onAmountPaid(order.id, Number(e.target.value) || 0)}
+                    className="h-8 pl-5 text-[12.5px]" />
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] text-muted-foreground uppercase mb-0.5">Balance Due</div>
+              <div className={cn("font-semibold text-[15px]", balanceDue > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+                ${balanceDue.toFixed(2)}
+              </div>
+            </div>
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground uppercase mb-1.5">Items</div>
@@ -231,9 +295,38 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCard, setGiftCard] = useState(null); // looked-up card, or null
+  const [giftCardError, setGiftCardError] = useState("");
+  const [giftCardChecking, setGiftCardChecking] = useState(false);
+  const [giftCardAmount, setGiftCardAmount] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
   useEffect(() => {
-    if (open) setForm({ customer_name: "", email: "", phone: "", address: "", delivery_date: "", internal_notes: "", items: [] });
+    if (open) {
+      setForm({ customer_name: "", email: "", phone: "", address: "", delivery_date: "", internal_notes: "", items: [] });
+      setGiftCardCode(""); setGiftCard(null); setGiftCardError(""); setGiftCardAmount("");
+      setSubmitError("");
+    }
   }, [open]);
+
+  const checkGiftCard = async () => {
+    if (!giftCardCode.trim()) return;
+    setGiftCardChecking(true);
+    setGiftCardError(""); setGiftCard(null);
+    try {
+      const card = await lookupGiftCard(giftCardCode.trim());
+      if (!card.is_active) { setGiftCardError("This gift card has been voided."); }
+      else if (Number(card.current_balance) <= 0) { setGiftCardError("This gift card has no remaining balance."); }
+      else {
+        setGiftCard(card);
+        setGiftCardAmount(String(Math.min(Number(card.current_balance), total)));
+      }
+    } catch (e) {
+      setGiftCardError(e.status === 404 ? "No gift card found with that code." : (e.message || "Could not look up this gift card."));
+    }
+    setGiftCardChecking(false);
+  };
 
   const addItem = () => set("items", [...form.items, { dessert_id: "", name: "", quantity: 1, price: 0, size: "Standard", size_multiplier: 1 }]);
   const updateItem = (i, field, value) => {
@@ -259,20 +352,28 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
   const removeItem = (i) => set("items", form.items.filter((_, idx) => idx !== i));
 
   const total = form.items.reduce((s, it) => s + (it.quantity || 0) * (it.price || 0), 0);
+  const appliedAmount = giftCard ? Math.min(Number(giftCardAmount) || 0, Number(giftCard.current_balance), total) : 0;
 
   const submit = async () => {
     setSaving(true);
+    setSubmitError("");
     try {
       await entities.Order.create({
         ...form,
+        delivery_date: form.delivery_date || null,
         order_number: "RV-" + Math.floor(1000 + Math.random() * 9000),
         total_value: total,
         status: "Pending",
-        payment_status: "Unpaid",
+        payment_status: appliedAmount >= total && total > 0 ? "Paid" : appliedAmount > 0 ? "Partially Paid" : "Unpaid",
         channel: "Website",
+        gift_card_code: giftCard ? giftCard.code : "",
+        gift_card_amount_applied: appliedAmount,
       });
       onCreated(); onClose();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setSubmitError(e.message || "Could not create this order. Please check the fields and try again.");
+    }
     setSaving(false);
   };
 
@@ -287,6 +388,34 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
           <div className="col-span-2"><Label>Address</Label><Input value={form.address} onChange={(e) => set("address", e.target.value)} className="mt-1" /></div>
           <div><Label>Delivery Date</Label><Input type="date" value={form.delivery_date} onChange={(e) => set("delivery_date", e.target.value)} className="mt-1" /></div>
           <div><Label>Total (auto)</Label><Input value={`$${total.toFixed(2)}`} readOnly className="mt-1 font-semibold" /></div>
+
+          {/* Gift card redemption */}
+          <div className="col-span-2 rounded-xl border border-border/60 p-2.5 space-y-2">
+            <Label className="text-[12px] flex items-center gap-1.5"><Gift className="w-3.5 h-3.5" /> Gift Card (optional)</Label>
+            {!giftCard ? (
+              <div className="flex items-center gap-2">
+                <Input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())} placeholder="Gift card code" className="h-9 text-[12.5px] font-mono" />
+                <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={checkGiftCard} disabled={giftCardChecking || !giftCardCode.trim()}>
+                  {giftCardChecking ? "Checking…" : "Apply"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-[12.5px] font-mono">{giftCard.code}</span>
+                <span className="text-[11.5px] text-muted-foreground">balance ${Number(giftCard.current_balance).toFixed(2)}</span>
+                <div className="relative w-24 ml-auto">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
+                  <Input type="number" step="0.01" min="0" max={Math.min(Number(giftCard.current_balance), total)} value={giftCardAmount}
+                    onChange={(e) => setGiftCardAmount(e.target.value)} className="h-8 pl-5 text-[12.5px]" />
+                </div>
+                <button type="button" onClick={() => { setGiftCard(null); setGiftCardCode(""); setGiftCardAmount(""); }} className="w-8 h-8 rounded-lg border border-border hover:bg-muted flex items-center justify-center shrink-0">
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+            {giftCardError && <p className="text-[11.5px] text-rose-600">{giftCardError}</p>}
+            {giftCard && <p className="text-[11.5px] text-muted-foreground">Applying ${appliedAmount.toFixed(2)} · remaining total ${Math.max(total - appliedAmount, 0).toFixed(2)}</p>}
+          </div>
 
           {/* Line items */}
           <div className="col-span-2">
@@ -336,6 +465,7 @@ function CreateOrderDialog({ open, desserts, inventory, onClose, onCreated }) {
           )}
 
           <div className="col-span-2"><Label>Internal Notes</Label><Textarea value={form.internal_notes} onChange={(e) => set("internal_notes", e.target.value)} className="mt-1" rows={2} /></div>
+          {submitError && <p className="col-span-2 text-[12.5px] text-rose-600">{submitError}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

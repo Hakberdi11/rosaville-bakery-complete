@@ -68,6 +68,16 @@ export interface SiteContent {
   accent_color: string;
 }
 
+export interface OrderStatus {
+  order_number: string;
+  status: string;
+  payment_status: string;
+  items: { name: string; quantity: number; price: number; size?: string }[];
+  total_value: number;
+  delivery_date: string | null;
+  created_at: string;
+}
+
 interface Paginated<T> {
   count: number;
   next: string | null;
@@ -147,7 +157,11 @@ export const api = {
       items: { name: string; dessert_id: number; quantity: number; price: number }[];
       total_value: number;
       internal_notes?: string;
-    }) => request("/api/orders/", { method: "POST", body: JSON.stringify(data) }),
+    }) => request<{ order_number: string }>("/api/orders/", { method: "POST", body: JSON.stringify(data) }),
+    lookup: (orderNumber: string, email: string) =>
+      request<OrderStatus>(
+        `/api/orders/lookup/?order_number=${encodeURIComponent(orderNumber)}&email=${encodeURIComponent(email)}`
+      ),
   },
   uploadFile: async (file: File) => {
     const formData = new FormData();

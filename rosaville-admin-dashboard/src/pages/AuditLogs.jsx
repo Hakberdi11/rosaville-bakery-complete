@@ -23,8 +23,7 @@ export default function AuditLogs() {
         const push = (arr, type, icon, color, label) => arr.forEach((r) => entries.push({
           id: type + r.id, type, icon, color,
           action: label, target: r.name || r.title || r.customer_name || r.order_number || String(r.id).slice(-6),
-          by: r.created_by || r.updated_by || "system",
-          date: r.updated_date || r.created_date,
+          date: r.updated_at || r.created_at,
         }));
         push(orders, "order", ShoppingBag, "blue", "Order");
         push(customers, "customer", Users, "violet", "Customer");

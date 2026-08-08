@@ -1,11 +1,25 @@
 from rest_framework.routers import DefaultRouter
 
-from .views import CustomerViewSet, FeedbackViewSet, InventoryItemViewSet, OrderViewSet, TaskViewSet
+from .views import (
+    CustomerViewSet,
+    FeedbackViewSet,
+    GiftCardViewSet,
+    InventoryItemViewSet,
+    OrderViewSet,
+    PurchaseOrderViewSet,
+    StockMovementViewSet,
+    SupplierViewSet,
+    TaskViewSet,
+)
 
 router = DefaultRouter()
 router.register("customers", CustomerViewSet, basename="customer")
+router.register("suppliers", SupplierViewSet, basename="supplier")
 router.register("inventory", InventoryItemViewSet, basename="inventoryitem")
+router.register("stock-movements", StockMovementViewSet, basename="stockmovement")
+router.register("purchase-orders", PurchaseOrderViewSet, basename="purchaseorder")
 router.register("orders", OrderViewSet, basename="order")
+router.register("gift-cards", GiftCardViewSet, basename="giftcard")
 router.register("feedback", FeedbackViewSet, basename="feedback")
 router.register("tasks", TaskViewSet, basename="task")
 

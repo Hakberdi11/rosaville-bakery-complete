@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { entities, uploadFile } from '@/lib/api';
-import { Cake, Plus, Search, Pencil, Trash2, Star, Copy, Upload, X, Link2 } from "lucide-react";
+import { Cake, Plus, Search, Pencil, Trash2, Star, Copy, Upload, Link2 } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,15 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Image } from "@/components/ui/image";
 import { cn } from "@/lib/utils";
-import IngredientRow from "@/components/admin/IngredientRow";
+import RecipeEditor from "@/components/admin/RecipeEditor";
 
 const CATEGORIES = ["Signature Cakes", "Custom Cakes", "Seasonal Specials", "Cupcakes", "Pastries", "Cheesecakes"];
-const SAMPLE_IMAGES = [
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-  "/placeholder-dessert.svg",
-];
+const FALLBACK_IMAGE = "/placeholder-dessert.svg";
 
 export default function Desserts() {
   const [desserts, setDesserts] = useState([]);
@@ -101,7 +96,7 @@ export default function Desserts() {
           {filtered.map((d) => (
             <div key={d.id} className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:shadow-md transition-all">
               <div className="relative aspect-[4/3] bg-muted overflow-hidden">
-                <Image src={d.featured_image || d.images?.[0] || SAMPLE_IMAGES[0]} alt={d.name} fittingType="fill" className="w-full h-full" />
+                <Image src={d.featured_image || d.images?.[0] || FALLBACK_IMAGE} alt={d.name} fittingType="fill" className="w-full h-full" />
                 <div className="absolute top-2.5 left-2.5 flex gap-1.5">
                   {d.featured && <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-white" /> Featured</span>}
                   {d.seasonal && <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-semibold">Seasonal</span>}
@@ -122,8 +117,10 @@ export default function Desserts() {
                 <div className="text-[11.5px] text-muted-foreground mb-2">{d.category}</div>
                 <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">{d.description}</p>
                 <div className="flex items-center gap-2 mt-2.5 text-[11px]">
-                  {d.ingredients?.length > 0 && (
+                  {d.ingredients?.length > 0 ? (
                     <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">{d.ingredients.length} ingredients</span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">No ingredients set</span>
                   )}
                   {d.sizes?.length > 0 && (
                     <span className="px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 font-medium">{d.sizes.length} sizes</span>
@@ -224,78 +221,14 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Ingredients builder */}
-          <div className="col-span-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <Label>Base Recipe <span className="text-muted-foreground font-normal text-[11.5px]">(Standard size — used when a size has no specific ingredients)</span></Label>
-              <Button type="button" variant="outline" size="sm" className="h-7 text-[12px] gap-1" onClick={() => set("ingredients", [...(form.ingredients || []), { inventory_item_id: "", name: "", quantity: 1, unit: "kg" }])}>
-                <Plus className="w-3.5 h-3.5" /> Add Ingredient
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {(form.ingredients || []).map((ing, idx) => (
-                <IngredientRow key={idx} ing={ing} inventory={inventory}
-                  onChange={(next) => { const arr = [...form.ingredients]; arr[idx] = next; set("ingredients", arr); }}
-                  onRemove={() => set("ingredients", form.ingredients.filter((_, i) => i !== idx))} />
-              ))}
-              {(!form.ingredients || form.ingredients.length === 0) && (
-                <p className="text-[11.5px] text-muted-foreground italic">No ingredients added. Linking ingredients enables automatic inventory consumption.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Sizes builder */}
-          <div className="col-span-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <Label>Size Variants <span className="text-muted-foreground font-normal">(optional — scales ingredient quantities)</span></Label>
-              <Button type="button" variant="outline" size="sm" className="h-7 text-[12px] gap-1" onClick={() => set("sizes", [...(form.sizes || []), { label: "", multiplier: 1, price: form.price || 0, ingredients: [] }])}>
-                <Plus className="w-3.5 h-3.5" /> Add Size
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {(form.sizes || []).map((sz, idx) => {
-                const setSz = (patch) => { const arr = [...form.sizes]; arr[idx] = { ...sz, ...patch }; set("sizes", arr); };
-                const setSzIngs = (ings) => setSz({ ingredients: ings });
-                return (
-                <div key={idx} className="rounded-xl border border-border/60 p-3 bg-muted/10 space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <Input value={sz.label} onChange={(e) => setSz({ label: e.target.value })} placeholder='e.g. Medium (8")' className="h-9 flex-1 text-[12.5px]" />
-                    <div className="relative w-24">
-                      <Input type="number" step="0.1" value={sz.multiplier} onChange={(e) => setSz({ multiplier: Number(e.target.value) })} className="h-9 pr-12 text-[12.5px]" />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">×</span>
-                    </div>
-                    <div className="relative w-24">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
-                      <Input type="number" value={sz.price} onChange={(e) => setSz({ price: Number(e.target.value) })} className="h-9 pl-5 text-[12.5px]" />
-                    </div>
-                    <button onClick={() => set("sizes", form.sizes.filter((_, i) => i !== idx))} className="w-8 h-9 rounded-lg border border-border hover:bg-muted flex items-center justify-center shrink-0"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                  </div>
-                  <div className="pl-1">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] font-medium text-muted-foreground">Ingredients for this size <span className="text-muted-foreground/70">(overrides base × multiplier)</span></span>
-                      <Button type="button" variant="outline" size="sm" className="h-6 text-[11px] gap-1" onClick={() => setSzIngs([...(sz.ingredients || []), { inventory_item_id: "", name: "", quantity: 1, unit: "kg" }])}>
-                        <Plus className="w-3 h-3" /> Add
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {(sz.ingredients || []).map((ing, i) => (
-                        <IngredientRow key={i} ing={ing} inventory={inventory}
-                          onChange={(next) => { const arr = [...(sz.ingredients || [])]; arr[i] = next; setSzIngs(arr); }}
-                          onRemove={() => setSzIngs((sz.ingredients || []).filter((_, j) => j !== i))} />
-                      ))}
-                      {(!sz.ingredients || sz.ingredients.length === 0) && (
-                        <p className="text-[11px] text-muted-foreground italic">Uses base recipe × {sz.multiplier || 1} when size-specific ingredients aren't set.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-              {(!form.sizes || form.sizes.length === 0) && (
-                <p className="text-[11.5px] text-muted-foreground italic">No size variants — orders use the base recipe (1×).</p>
-              )}
-            </div>
-          </div>
+          <RecipeEditor
+            ingredients={form.ingredients}
+            sizes={form.sizes}
+            basePrice={form.price}
+            inventory={inventory}
+            onIngredientsChange={(ings) => set("ingredients", ings)}
+            onSizesChange={(sizes) => set("sizes", sizes)}
+          />
 
           <div className="col-span-2"><Label>Allergens (comma separated)</Label><Input value={form.allergens?.join(", ")} onChange={(e) => setList("allergens", e.target.value)} className="mt-1" /></div>
           <div><Label>Preparation Time</Label><Input value={form.preparation_time} onChange={(e) => set("preparation_time", e.target.value)} className="mt-1" placeholder="e.g. 2 hours" /></div>

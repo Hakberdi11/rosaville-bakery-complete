@@ -2,34 +2,13 @@ import { useEffect, useState } from "react";
 import { useSiteContent } from "@/contexts/SiteContentContext";
 import { api } from "@/lib/api";
 
-const FALLBACK_TEAM = [
-  {
-    name: 'Rosa',
-    role: 'Head Baker & Founder',
-    bio: 'With 20 years of baking experience, Rosa brings her grandmother\'s recipes and her own creative flair to every creation.',
-    image_url: '',
-  },
-  {
-    name: 'Marco',
-    role: 'Pastry Chef',
-    bio: 'Marco studied pastry arts in France and brings European elegance to our dessert collection.',
-    image_url: '',
-  },
-  {
-    name: 'Emma',
-    role: 'Café Manager',
-    bio: 'Emma ensures every guest feels welcomed and cared for, creating the warm atmosphere Rosaville is known for.',
-    image_url: '',
-  },
-];
-
 export default function About() {
   const { content } = useSiteContent();
-  const [team, setTeam] = useState(FALLBACK_TEAM);
+  const [team, setTeam] = useState<Array<{ name: string; role: string; bio: string; image_url: string }>>([]);
 
   useEffect(() => {
     api.team.list().then((members) => {
-      if (members.length > 0) setTeam(members);
+      setTeam(members);
     }).catch(() => {});
   }, []);
 
@@ -116,6 +95,7 @@ export default function About() {
       </section>
 
       {/* Team Section */}
+      {team.length > 0 && (
       <section className="py-20 bg-background">
         <div className="container">
           <h2 className="font-serif text-4xl font-bold text-foreground text-center mb-16 fade-in">
@@ -150,6 +130,7 @@ export default function About() {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }
