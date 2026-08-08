@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { entities } from "@/lib/api";
 import { StatusBadge } from "@/components/admin/PageHeader";
+import usePolling from "@/hooks/use-polling";
 
 // Roles: admin (full), manager (operations), employee (tasks + production only)
 const navGroups = [
@@ -111,6 +112,8 @@ function RecentOrderWidget() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const load = () => entities.Order.list("-created_date", 1).then((orders) => setOrder(orders[0] || null)).catch(() => {});
+
   useEffect(() => {
     let cancelled = false;
     entities.Order.list("-created_date", 1)
@@ -119,6 +122,9 @@ function RecentOrderWidget() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+  // Mounted on every page via Layout — polling here surfaces new orders
+  // app-wide without needing a manual refresh.
+  usePolling(load, 15000);
 
   if (loading || !order) return null;
 

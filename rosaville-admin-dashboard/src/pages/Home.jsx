@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import usePolling from "@/hooks/use-polling";
 import { entities } from '@/lib/api';
 import {
   LayoutDashboard, DollarSign, ShoppingBag, Users, Package, AlertTriangle,
@@ -50,20 +51,22 @@ export default function Home() {
   const [inventory, setInventory] = useState([]);
   const [desserts, setDesserts] = useState([]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [o, c, i, d] = await Promise.all([
-          entities.Order.list("-created_date", 200),
-          entities.Customer.list("-created_date", 200),
-          entities.InventoryItem.list("-created_date", 200),
-          entities.Dessert.list("-display_order", 200),
-        ]);
-        setOrders(o); setCustomers(c); setInventory(i); setDesserts(d);
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    })();
-  }, []);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const [o, c, i, d] = await Promise.all([
+        entities.Order.list("-created_date", 200),
+        entities.Customer.list("-created_date", 200),
+        entities.InventoryItem.list("-created_date", 200),
+        entities.Dessert.list("-display_order", 200),
+      ]);
+      setOrders(o); setCustomers(c); setInventory(i); setDesserts(d);
+    } catch (e) { console.error(e); }
+    if (!silent) setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  // Keep dashboard stats/recent orders fresh without a manual page refresh.
+  usePolling(() => load(true), 15000);
 
   const revenueTotal = orders.reduce((s, o) => s + (o.total_value || 0), 0);
   const pendingOrders = orders.filter((o) => ["Pending", "Confirmed", "In Production"].includes(o.status)).length;

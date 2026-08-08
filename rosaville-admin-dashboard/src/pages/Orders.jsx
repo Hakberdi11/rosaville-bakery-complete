@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import usePolling from "@/hooks/use-polling";
 import { entities, lookupGiftCard } from '@/lib/api';
 import { ShoppingBag, Plus, Search, Download, X, ChevronDown, Beaker, AlertTriangle, CheckCircle2, Gift } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
@@ -22,8 +23,8 @@ export default function Orders() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [o, d, i] = await Promise.all([
         entities.Order.list("-created_date", 500),
@@ -32,9 +33,12 @@ export default function Orders() {
       ]);
       setOrders(o); setDesserts(d); setInventory(i);
     } catch (e) { console.error(e); }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  // Poll for new/updated orders (e.g. a customer checkout, or another staff
+  // member's change) without requiring a manual page refresh.
+  usePolling(() => load(true), 15000);
 
   const filtered = useMemo(() => orders.filter((o) => {
     const matchSearch = !search ||
