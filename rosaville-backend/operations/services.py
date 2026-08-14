@@ -3,13 +3,14 @@ and reads Dessert from the catalog app — kept out of models.py (which owns
 single-row logic like InventoryItem.apply_stock_movement) and out of views.py
 (which should stay thin)."""
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db.models import Sum
+from rest_framework.exceptions import ValidationError
 
 from catalog.models import Dessert
 
-from .models import InventoryItem, StockMovement
+from .models import InventoryItem, LoyaltySettings, StockMovement
 
 # Python port of ingredientCalc.js's CONVERSIONS table — must stay in sync
 # with rosaville-admin-dashboard/src/lib/ingredientCalc.js if that changes.
@@ -131,3 +132,92 @@ def reverse_order_ingredient_deduction(order):
             related_order=order,
             reason="Order cancelled — ingredients restored",
         )
+
+
+# --- Server-authoritative order pricing -------------------------------------
+# Nothing a client POSTs to /api/orders/ may decide what an order costs. The
+# storefront's Checkout still computes a total for display, but the number that
+# gets stored is always recomputed here from the current catalog + the
+# owner-configured LoyaltySettings. See LoyaltySettings for why: the reward has
+# to be derived from server-held state, never from a value the browser sends.
+
+TWO_PLACES = Decimal("0.01")
+
+
+def _money(value):
+    return Decimal(str(value or 0)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+
+def resolve_line_unit_price(dessert, item):
+    """Authoritative unit price for one order line, ignoring whatever `price`
+    the client sent. Size pricing mirrors the dashboard's CreateOrderDialog:
+    an explicit per-size price wins, else the size multiplier scales the base
+    price, else the base price stands on its own."""
+    size_label = item.get("size")
+    size = next((s for s in (dessert.sizes or []) if s.get("label") == size_label), None) if size_label else None
+    if size and size.get("price") not in (None, ""):
+        return _money(size["price"])
+    if size and size.get("multiplier"):
+        return _money(dessert.price * Decimal(str(size["multiplier"])))
+    return _money(dessert.price)
+
+
+def price_order_items(items, allow_off_menu=False):
+    """Returns (priced_items, subtotal). `priced_items` is a copy of `items`
+    with `price` (and `name`) overwritten from the catalog, so the stored order
+    record can't disagree with the total.
+
+    `allow_off_menu=True` (staff-created walk-in/phone orders) lets a line
+    without a resolvable dessert_id keep its submitted price — that's a
+    legitimate custom quote. On the public checkout path it's a hard error:
+    an unknown dessert_id is the obvious way to smuggle in an arbitrary price.
+    """
+    items = items or []
+    dessert_ids = {
+        int(it["dessert_id"])
+        for it in items
+        if str(it.get("dessert_id") or "").strip().isdigit()
+    }
+    desserts_by_id = {d.id: d for d in Dessert.objects.filter(id__in=dessert_ids)}
+
+    priced_items = []
+    subtotal = Decimal("0")
+    for index, item in enumerate(items):
+        line = dict(item)
+        raw_id = str(item.get("dessert_id") or "").strip()
+        dessert = desserts_by_id.get(int(raw_id)) if raw_id.isdigit() else None
+
+        try:
+            quantity = int(Decimal(str(item.get("quantity") or 0)))
+        except (ArithmeticError, ValueError):
+            quantity = 0
+        if quantity < 1:
+            raise ValidationError({"items": f"Line {index + 1}: quantity must be at least 1."})
+        line["quantity"] = quantity
+
+        if dessert is None:
+            if not allow_off_menu:
+                raise ValidationError({"items": f"Line {index + 1}: this item is no longer available."})
+            unit_price = _money(item.get("price"))
+        else:
+            unit_price = resolve_line_unit_price(dessert, item)
+            line["name"] = dessert.name
+
+        # float, not Decimal: `items` is a JSONField and json.dumps can't
+        # serialize Decimal. Money math stays in Decimal via `subtotal`.
+        line["price"] = float(unit_price)
+        subtotal += unit_price * quantity
+        priced_items.append(line)
+
+    return priced_items, _money(subtotal)
+
+
+def compute_loyalty_discount(subtotal, loyalty_settings):
+    """The reward is worth whatever the owner's LoyaltySettings say it's worth,
+    full stop — the client never gets a say in the amount."""
+    if not loyalty_settings.enabled:
+        return Decimal("0.00")
+    if loyalty_settings.reward_type == LoyaltySettings.RewardType.PERCENT_OFF:
+        pct = max(Decimal("0"), min(Decimal("100"), Decimal(str(loyalty_settings.reward_value))))
+        return _money(subtotal * pct / Decimal("100"))
+    return _money(min(Decimal(str(loyalty_settings.reward_value)), subtotal))

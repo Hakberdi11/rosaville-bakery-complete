@@ -5,13 +5,32 @@ from .models import (
     Feedback,
     GiftCard,
     InventoryItem,
+    LoyaltySettings,
     Order,
+    PricingSettings,
     PurchaseOrder,
     PurchaseOrderLine,
     StockMovement,
     Supplier,
     Task,
 )
+
+
+class PricingSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PricingSettings
+        fields = [
+            "target_margin_percent", "labor_hourly_rate", "overhead_percent",
+            "waste_buffer_percent", "category_margin_overrides", "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
+
+
+class LoyaltySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltySettings
+        fields = ["enabled", "purchases_required", "reward_type", "reward_value", "updated_at"]
+        read_only_fields = ["updated_at"]
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -94,10 +113,18 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    # Not a model field — set by the logged-in customer at checkout to consume
+    # a Customer.reward_available flag; validated server-side in perform_create.
+    redeem_loyalty_reward = serializers.BooleanField(write_only=True, required=False, default=False)
+
     class Meta:
         model = Order
         fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at"]
+        # total_value / gift_card_amount_applied / loyalty_discount_amount are
+        # deliberately NOT listed here: staff still PATCH them on existing
+        # orders. On *create* they're recomputed and overwritten server-side by
+        # OrderViewSet.perform_create, so whatever a client posts is ignored.
+        read_only_fields = ["id", "customer", "loyalty_discount_amount", "created_at", "updated_at"]
 
 
 class PublicOrderStatusSerializer(serializers.ModelSerializer):
@@ -125,6 +152,15 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class PublicFeedbackSerializer(serializers.ModelSerializer):
+    """Subset of Feedback exposed to the public testimonials section —
+    deliberately excludes email (staff-only PII)."""
+
+    class Meta:
+        model = Feedback
+        fields = ["id", "customer_name", "rating", "message", "dessert_name", "created_at"]
 
 
 class TaskSerializer(serializers.ModelSerializer):

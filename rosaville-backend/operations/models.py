@@ -11,6 +11,12 @@ class Customer(models.Model):
         VIP = "VIP", "VIP"
         AT_RISK = "At Risk", "At Risk"
 
+    # Links this CRM row to a storefront login account, once the customer
+    # registers (see accounts.views.RegisterView) — null for guest-checkout-only
+    # customers who never created an account.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer_profile"
+    )
     name = models.CharField(max_length=255)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -27,6 +33,9 @@ class Customer(models.Model):
     # plus manual adjustment from the dashboard. Deliberately not a tiered/enterprise
     # loyalty system — see .claude/research/dashboard-gap-analysis.md item #2.
     loyalty_points = models.PositiveIntegerField(default=0)
+    # Set True when order_count crosses a multiple of LoyaltySettings.purchases_required
+    # (see OrderViewSet.perform_create); consumed (reset False) on redemption.
+    reward_available = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -205,6 +214,13 @@ class Order(models.Model):
         WHOLESALE = "Wholesale", "Wholesale"
 
     order_number = models.CharField(max_length=50, blank=True)
+    # Resolved in OrderViewSet.perform_create — via the logged-in customer's
+    # profile if authenticated, else by matching `email` against Customer
+    # (same matching this app used before the FK existed). Null for guest
+    # checkouts whose email matches no known Customer.
+    customer = models.ForeignKey(
+        "Customer", null=True, blank=True, on_delete=models.SET_NULL, related_name="orders"
+    )
     customer_name = models.CharField(max_length=255)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -213,6 +229,11 @@ class Order(models.Model):
     total_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     gift_card_code = models.CharField(max_length=30, blank=True)
     gift_card_amount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # The loyalty reward actually granted on this order, computed server-side
+    # from LoyaltySettings at create time (see operations.services). Doubles as
+    # the redemption record — a non-zero value here is the only proof that a
+    # Customer.reward_available flag was consumed, and by which order.
+    loyalty_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     delivery_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
@@ -324,3 +345,67 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class PricingSettings(models.Model):
+    """Singleton (pk=1, use PricingSettings.load()) holding the business-wide
+    inputs to the automatic dessert-pricing formula: a default target margin,
+    a labor hourly rate, and optional overhead/waste toggles. Deliberately not
+    on the User model (Settings.jsx's business_name/currency/etc. live there
+    today, which is a latent bug — those fields diverge per staff account
+    rather than being shared) and not on SiteContent (that singleton is
+    public/unauthenticated, and margin%/labor rate is internal financial data
+    that must never be exposed there). Staff-only, both read and write."""
+
+    target_margin_percent = models.DecimalField(max_digits=5, decimal_places=2, default=40)
+    labor_hourly_rate = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    overhead_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    waste_buffer_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # {"Wedding Cakes": 70, ...} — per-category default margin, overriding
+    # target_margin_percent for desserts in that category unless the dessert
+    # itself also sets Dessert.target_margin_percent (the highest-priority override).
+    category_margin_overrides = models.JSONField(default=dict, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Pricing Settings"
+
+
+class LoyaltySettings(models.Model):
+    """Singleton (pk=1, use LoyaltySettings.load()) holding the owner-defined
+    punch-card reward rule, e.g. "every 5 purchases -> 50% off". Publicly
+    readable (the storefront shows customers their progress toward the next
+    reward) but staff-only to write — see LoyaltySettingsView."""
+
+    class RewardType(models.TextChoices):
+        PERCENT_OFF = "percent_off", "Percent off"
+        FIXED_OFF = "fixed_off", "Fixed amount off"
+
+    enabled = models.BooleanField(default=False)
+    purchases_required = models.PositiveIntegerField(default=5)
+    reward_type = models.CharField(max_length=20, choices=RewardType.choices, default=RewardType.PERCENT_OFF)
+    reward_value = models.DecimalField(max_digits=8, decimal_places=2, default=50)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Loyalty Settings"
