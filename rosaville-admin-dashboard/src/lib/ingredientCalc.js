@@ -143,6 +143,73 @@ export function calculateWasteRisk(inventory, orders, desserts, { lookbackDays =
   });
 }
 
+// Ingredient-only cost for one unit of a dessert (or one unit of a specific
+// size, when sizeLabel is given) — the same size-resolution rule as
+// calculateOrderIngredients (a size's own ingredients override the base
+// recipe entirely when non-empty; otherwise the base recipe scales by the
+// size's multiplier). This is the single source of truth for recipe cost —
+// both Recipes.jsx and the automatic-pricing UI in Desserts.jsx call this
+// rather than each computing it inline (that duplication used to mean the
+// per-size ingredient override was silently ignored in Recipes.jsx's cost
+// figure, since its inline calc only ever read the base recipe).
+export function calculateRecipeCost(dessert, inventory, sizeLabel = null) {
+  let ingredients = dessert.ingredients || [];
+  let multiplier = 1;
+  if (sizeLabel) {
+    const size = (dessert.sizes || []).find((s) => s.label === sizeLabel);
+    if (size?.ingredients?.length > 0) {
+      ingredients = size.ingredients;
+    } else {
+      multiplier = size?.multiplier || 1;
+    }
+  }
+  return ingredients.reduce((sum, ing) => {
+    const item = inventory.find((i) => String(i.id) === String(ing.inventory_item_id));
+    if (!item) return sum;
+    const converted = convertUnit((ing.quantity || 0) * multiplier, ing.unit, item.unit);
+    return sum + converted * (item.cost_per_unit || 0);
+  }, 0);
+}
+
+// Full suggested-price breakdown for a dessert (or one of its sizes): live
+// ingredient cost (+ an optional waste/spoilage buffer) + labor (hours ×
+// hourly rate ÷ batch yield, scaled by the size's own multiplier when pricing
+// a size) + a flat packaging cost, marked up by an optional overhead %, then
+// divided down by the target margin — margin-of-price framing
+// (price = totalCost / (1 - margin%)), deliberately NOT markup-on-cost
+// (price = totalCost * (1 + markup%)) — per research, confusing the two is
+// the most common real bakery-pricing mistake, so this codebase picks one
+// framing and labels it "margin" everywhere, never "markup".
+//
+// marginPercent resolves in priority order: the dessert's own override ->
+// the pricing settings' per-category default -> the global default.
+export function calculateSuggestedPrice(dessert, inventory, pricingSettings, sizeLabel = null) {
+  const ingredientCost = calculateRecipeCost(dessert, inventory, sizeLabel);
+  const wasteCost = ingredientCost * ((pricingSettings?.waste_buffer_percent || 0) / 100);
+
+  const size = sizeLabel ? (dessert.sizes || []).find((s) => s.label === sizeLabel) : null;
+  const sizeMultiplier = size?.multiplier || 1;
+  const batchYield = Number(dessert.batch_yield) || 1;
+  const laborCost = ((Number(dessert.labor_hours) || 0) * (Number(pricingSettings?.labor_hourly_rate) || 0) / batchYield) * sizeMultiplier;
+  const packagingCost = Number(dessert.packaging_cost) || 0;
+
+  const subtotal = ingredientCost + wasteCost + laborCost + packagingCost;
+  const overheadCost = subtotal * ((pricingSettings?.overhead_percent || 0) / 100);
+  const totalCost = subtotal + overheadCost;
+
+  const marginPercent =
+    dessert.target_margin_percent ??
+    pricingSettings?.category_margin_overrides?.[dessert.category] ??
+    pricingSettings?.target_margin_percent ??
+    0;
+  const suggestedPrice = marginPercent < 100 ? totalCost / (1 - marginPercent / 100) : totalCost;
+
+  return {
+    ingredientCost, wasteCost, laborCost, packagingCost,
+    subtotal, overheadCost, totalCost, marginPercent, suggestedPrice,
+  };
+}
+
 // Aggregates ingredient needs across a list of orders (for the order composer preview).
 export function summarizeIngredients(items, desserts, inventory) {
   const pseudo = { items };

@@ -40,6 +40,12 @@ class SiteContentSerializer(serializers.ModelSerializer):
             "contact_email", "contact_phone", "contact_address", "business_hours",
             "instagram_url", "facebook_url",
             "primary_color", "accent_color",
+            "background_color", "foreground_color", "border_color", "muted_color",
+            "heading_font", "body_font",
+            "site_name",
+            "home_why_choose_title", "home_why_choose_subtitle", "home_why_choose_items",
+            "about_subtitle", "about_values_title", "about_values_items",
+            "show_testimonials",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

@@ -12,7 +12,7 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-me")
 
-DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
+DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
@@ -36,6 +36,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -74,13 +75,20 @@ def _database_config():
         import urllib.parse as up
 
         parsed = up.urlparse(url)
+        query = up.parse_qs(parsed.query)
+        sslmode = query.get("sslmode", ["require"])[0]
+        # urlparse does NOT percent-decode .username/.password — a password
+        # with special characters (recommended, and what Supabase generates)
+        # would otherwise be sent to Postgres still percent-encoded and fail
+        # auth. Explicitly unquote both.
         return {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": parsed.path.lstrip("/"),
-            "USER": parsed.username or "",
-            "PASSWORD": parsed.password or "",
+            "USER": up.unquote(parsed.username) if parsed.username else "",
+            "PASSWORD": up.unquote(parsed.password) if parsed.password else "",
             "HOST": parsed.hostname or "localhost",
             "PORT": parsed.port or 5432,
+            "OPTIONS": {"sslmode": sslmode},
         }
     return {
         "ENGINE": "django.db.backends.postgresql",
@@ -109,9 +117,72 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Brevo (ex-Sendinblue) newsletter sync. Leave BREVO_API_KEY unset to skip
+# syncing entirely — subscribers still get saved locally either way.
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
+BREVO_LIST_ID = os.environ.get("BREVO_LIST_ID")
+
+# Transactional email (password resets, staff temp-password delivery). With no
+# EMAIL_HOST set, mail is printed to the runserver console instead of sent —
+# safe local-dev default, nothing to configure to see emails while developing.
+# In production set EMAIL_HOST (Brevo's SMTP relay works with the same
+# account as BREVO_API_KEY above — smtp-relay.brevo.com:587 — or any SMTP
+# provider) plus EMAIL_HOST_USER/EMAIL_HOST_PASSWORD.
+EMAIL_HOST = os.environ.get("EMAIL_HOST")
+if EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@rosaville.local")
+
+# Base URLs of the two frontends, used to build links in outgoing emails
+# (password reset links) — customers get a FRONTEND_URL link, staff get a
+# DASHBOARD_URL link, since password-reset is one shared backend feature
+# serving both apps' distinct login pages.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:5174")
+
+# Media storage defaults to local disk (fine for local dev). Setting
+# SUPABASE_S3_BUCKET switches uploads to Supabase's S3-compatible object
+# storage instead — required in production, since local disk on most hosts
+# (Railway included) doesn't survive a redeploy.
+SUPABASE_S3_BUCKET = os.environ.get("SUPABASE_S3_BUCKET")
+if SUPABASE_S3_BUCKET:
+    STORAGES["default"] = {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"}
+    AWS_STORAGE_BUCKET_NAME = SUPABASE_S3_BUCKET
+    AWS_S3_ENDPOINT_URL = os.environ.get("SUPABASE_S3_ENDPOINT")
+    AWS_ACCESS_KEY_ID = os.environ.get("SUPABASE_S3_ACCESS_KEY")
+    AWS_SECRET_ACCESS_KEY = os.environ.get("SUPABASE_S3_SECRET_KEY")
+    AWS_S3_REGION_NAME = os.environ.get("SUPABASE_S3_REGION", "us-east-1")
+    AWS_S3_ADDRESSING_STYLE = "path"
+    AWS_DEFAULT_ACL = "public-read"
+    AWS_QUERYSTRING_AUTH = False
+    # Supabase's S3-compatible API endpoint (SUPABASE_S3_ENDPOINT, used above
+    # for the actual upload) requires signed requests — a plain GET against
+    # it 403s. Supabase serves public reads from a *different* URL shape,
+    # .../storage/v1/object/public/<bucket>/<key>, on the project's main
+    # domain rather than the S3 endpoint's host. Point django-storages'
+    # generated .url() there instead, via SUPABASE_URL (the project's base
+    # URL, e.g. https://<project-ref>.supabase.co — shown on the project
+    # dashboard, distinct from SUPABASE_S3_ENDPOINT).
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+    if supabase_url:
+        supabase_host = supabase_url.replace("https://", "").replace("http://", "").rstrip("/")
+        AWS_S3_CUSTOM_DOMAIN = f"{supabase_host}/storage/v1/object/public/{SUPABASE_S3_BUCKET}"
+else:
+    STORAGES["default"] = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

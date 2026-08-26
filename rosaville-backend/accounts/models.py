@@ -34,6 +34,7 @@ class User(AbstractUser):
         ADMIN = "admin", "Admin"
         MANAGER = "manager", "Manager"
         EMPLOYEE = "employee", "Employee"
+        CUSTOMER = "customer", "Customer"
 
     username = None
     email = models.EmailField(unique=True)

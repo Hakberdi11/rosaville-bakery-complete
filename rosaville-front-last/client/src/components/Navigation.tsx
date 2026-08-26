@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { Menu, X, ShoppingBag, Heart } from 'lucide-react';
+import { Menu, X, ShoppingBag, Heart, User } from 'lucide-react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
 import { useFavourites } from '@/contexts/FavouritesContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSiteContent } from '@/contexts/SiteContentContext';
 import RoseIcon from './RoseIcon';
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
   const { items } = useCart();
   const { favourites } = useFavourites();
+  const { isAuthenticated } = useAuth();
+  const { content } = useSiteContent();
 
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -29,7 +33,7 @@ export default function Navigation() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <RoseIcon className="w-8 h-8" />
-          <span className="font-serif text-xl font-bold text-foreground" style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>Rosaville</span>
+          <span className="font-serif text-xl font-bold text-foreground italic">{content?.site_name || 'Rosaville Desserts'}</span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -54,6 +58,9 @@ export default function Navigation() {
                 {items.length}
               </span>
             )}
+          </Link>
+          <Link href={isAuthenticated ? '/account' : '/login'} className="p-2 hover:bg-muted rounded-lg transition-colors" aria-label="Account">
+            <User size={20} className="text-foreground" />
           </Link>
         </div>
 
@@ -103,6 +110,14 @@ export default function Navigation() {
             >
               <ShoppingBag size={18} />
               Cart {items.length > 0 && `(${items.length})`}
+            </Link>
+            <Link
+              href={isAuthenticated ? '/account' : '/login'}
+              onClick={closeMenu}
+              className="flex items-center gap-2 py-2 px-3 font-sans text-sm font-medium text-foreground hover:text-accent hover:bg-muted rounded-lg transition-colors"
+            >
+              <User size={18} />
+              {isAuthenticated ? 'My Account' : 'Log In'}
             </Link>
           </div>
         </div>

@@ -126,6 +126,16 @@ export const siteContent = {
   update: (payload) => request("/api/site-content/", { method: "PATCH", body: JSON.stringify(payload) }),
 };
 
+export const pricingSettings = {
+  get: () => request("/api/pricing-settings/"),
+  update: (payload) => request("/api/pricing-settings/", { method: "PATCH", body: JSON.stringify(payload) }),
+};
+
+export const loyaltySettings = {
+  get: () => request("/api/loyalty-settings/"),
+  update: (payload) => request("/api/loyalty-settings/", { method: "PATCH", body: JSON.stringify(payload) }),
+};
+
 export const auth = {
   login: async (email, password) => {
     const data = await request("/api/auth/login/", {
@@ -147,6 +157,13 @@ export const auth = {
     clearTokens();
   },
   isAuthenticated: () => Boolean(getAccessToken()),
+  requestPasswordReset: (email) =>
+    request("/api/auth/password-reset/", { method: "POST", body: JSON.stringify({ email }) }),
+  confirmPasswordReset: (uid, token, newPassword) =>
+    request("/api/auth/password-reset-confirm/", {
+      method: "POST",
+      body: JSON.stringify({ uid, token, new_password: newPassword }),
+    }),
 };
 
 export async function uploadFile(file) {

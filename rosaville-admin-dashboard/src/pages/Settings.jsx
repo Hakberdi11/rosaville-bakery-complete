@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { auth } from '@/lib/api';
-import { Settings as SettingsIcon, Save, Store, Globe, Bell } from "lucide-react";
+import { auth, pricingSettings } from '@/lib/api';
+import { Settings as SettingsIcon, Save, Store, Globe, Bell, Calculator, Plus, X } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,16 @@ export default function Settings() {
     currency: "USD", tagline: "", low_stock_alerts: true, new_order_alerts: true, feedback_alerts: true,
   });
   const [saving, setSaving] = useState(false);
+
+  // Pricing settings are a separate backing model (operations.PricingSettings,
+  // a staff-only singleton) from the Business Profile/Notification fields
+  // above (which live on the logged-in User row) — kept as a distinct form
+  // and save action so one save can never silently drop the other's fields.
+  const [pricingForm, setPricingForm] = useState({
+    target_margin_percent: 40, labor_hourly_rate: 0, overhead_percent: 0, waste_buffer_percent: 0,
+  });
+  const [categoryMargins, setCategoryMargins] = useState([]); // [{category, percent}] — dict on the wire
+  const [pricingSaving, setPricingSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -36,7 +46,27 @@ export default function Settings() {
     }
   }, [user]);
 
+  useEffect(() => {
+    pricingSettings.get().then((data) => {
+      setPricingForm({
+        target_margin_percent: data.target_margin_percent ?? 40,
+        labor_hourly_rate: data.labor_hourly_rate ?? 0,
+        overhead_percent: data.overhead_percent ?? 0,
+        waste_buffer_percent: data.waste_buffer_percent ?? 0,
+      });
+      setCategoryMargins(Object.entries(data.category_margin_overrides || {}).map(([category, percent]) => ({ category, percent })));
+    }).catch((e) => console.error(e));
+  }, []);
+
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setPricing = (k, v) => setPricingForm((f) => ({ ...f, [k]: v }));
+  const setCategoryRow = (idx, patch) => {
+    const rows = [...categoryMargins];
+    rows[idx] = { ...rows[idx], ...patch };
+    setCategoryMargins(rows);
+  };
+  const addCategoryRow = () => setCategoryMargins([...categoryMargins, { category: "", percent: 40 }]);
+  const removeCategoryRow = (idx) => setCategoryMargins(categoryMargins.filter((_, i) => i !== idx));
 
   const save = async () => {
     setSaving(true);
@@ -49,6 +79,28 @@ export default function Settings() {
       toast({ title: "Could not save", description: e.message || "Something went wrong.", variant: "destructive" });
     }
     setSaving(false);
+  };
+
+  const savePricing = async () => {
+    setPricingSaving(true);
+    try {
+      const category_margin_overrides = {};
+      categoryMargins.forEach((row) => {
+        if (row.category.trim()) category_margin_overrides[row.category.trim()] = Number(row.percent) || 0;
+      });
+      await pricingSettings.update({
+        target_margin_percent: Number(pricingForm.target_margin_percent) || 0,
+        labor_hourly_rate: Number(pricingForm.labor_hourly_rate) || 0,
+        overhead_percent: Number(pricingForm.overhead_percent) || 0,
+        waste_buffer_percent: Number(pricingForm.waste_buffer_percent) || 0,
+        category_margin_overrides,
+      });
+      toast({ title: "Pricing settings saved", description: "Suggested prices across the dashboard will use these values." });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Could not save", description: e.message || "Something went wrong.", variant: "destructive" });
+    }
+    setPricingSaving(false);
   };
 
   return (
@@ -78,6 +130,52 @@ export default function Settings() {
             <label className="flex items-center justify-between"><span className="text-[13px] font-medium">New order alerts</span><Switch checked={form.new_order_alerts} onCheckedChange={(v) => set("new_order_alerts", v)} /></label>
             <label className="flex items-center justify-between"><span className="text-[13px] font-medium">Low stock alerts</span><Switch checked={form.low_stock_alerts} onCheckedChange={(v) => set("low_stock_alerts", v)} /></label>
             <label className="flex items-center justify-between"><span className="text-[13px] font-medium">New feedback alerts</span><Switch checked={form.feedback_alerts} onCheckedChange={(v) => set("feedback_alerts", v)} /></label>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2"><Calculator className="w-4 h-4 text-emerald-500" /><h3 className="font-heading font-semibold text-[15px]">Pricing</h3></div>
+            <Button size="sm" variant="outline" className="gap-2" onClick={savePricing} disabled={pricingSaving}><Save className="w-3.5 h-3.5" /> {pricingSaving ? "Saving…" : "Save Pricing Settings"}</Button>
+          </div>
+          <p className="text-[12px] text-muted-foreground mb-4">Drives the "Suggested Price" shown when adding or editing a dessert — ingredient cost (from Inventory) + labor + your margin below.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <div>
+              <Label>Default Target Margin %</Label>
+              <Input type="number" step="0.01" value={pricingForm.target_margin_percent} onChange={(e) => setPricing("target_margin_percent", e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Labor Hourly Rate ($)</Label>
+              <Input type="number" step="0.01" value={pricingForm.labor_hourly_rate} onChange={(e) => setPricing("labor_hourly_rate", e.target.value)} className="mt-1" />
+              {Number(pricingForm.labor_hourly_rate) === 0 && <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">Set this to include labor in suggested prices — currently ingredient-cost-only.</p>}
+            </div>
+            <div>
+              <Label>Overhead %</Label>
+              <Input type="number" step="0.01" value={pricingForm.overhead_percent} onChange={(e) => setPricing("overhead_percent", e.target.value)} className="mt-1" placeholder="0 = not included" />
+            </div>
+            <div>
+              <Label>Waste/Spoilage Buffer %</Label>
+              <Input type="number" step="0.01" value={pricingForm.waste_buffer_percent} onChange={(e) => setPricing("waste_buffer_percent", e.target.value)} className="mt-1" placeholder="0 = not included" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <Label>Category Margin Overrides <span className="text-muted-foreground font-normal text-[11.5px]">(optional — e.g. higher margin for wedding cakes)</span></Label>
+              <Button type="button" variant="outline" size="sm" className="h-7 text-[12px] gap-1" onClick={addCategoryRow}><Plus className="w-3.5 h-3.5" /> Add Category</Button>
+            </div>
+            <div className="space-y-2">
+              {categoryMargins.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input value={row.category} onChange={(e) => setCategoryRow(idx, { category: e.target.value })} placeholder="e.g. Wedding Cakes" className="h-9 flex-1 text-[12.5px]" />
+                  <div className="relative w-28">
+                    <Input type="number" step="0.01" value={row.percent} onChange={(e) => setCategoryRow(idx, { percent: e.target.value })} className="h-9 pr-7 text-[12.5px]" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">%</span>
+                  </div>
+                  <button onClick={() => removeCategoryRow(idx)} className="w-8 h-9 rounded-lg border border-border hover:bg-muted flex items-center justify-center shrink-0"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                </div>
+              ))}
+              {categoryMargins.length === 0 && <p className="text-[11.5px] text-muted-foreground italic">No category overrides — every dessert uses the default margin above unless it sets its own.</p>}
+            </div>
           </div>
         </div>
       </div>

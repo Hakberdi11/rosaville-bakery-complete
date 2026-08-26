@@ -61,6 +61,12 @@ export default function PurchaseOrders() {
     setSelected((s) => (s?.id === id ? updated : s));
   };
 
+  const remove = async (id) => {
+    await entities.PurchaseOrder.delete(id);
+    setOrders((p) => p.filter((o) => o.id !== id));
+    setSelected(null);
+  };
+
   // For the receive flow: the /receive/ action already returns the updated
   // order — this only merges that into local state, it must NOT re-PATCH
   // (a redundant PATCH would re-send the order's lines through the nested
@@ -150,6 +156,7 @@ export default function PurchaseOrders() {
           onClose={() => setSelected(null)}
           onPatch={patch}
           onReceived={applyLocalUpdate}
+          onDelete={remove}
         />
       )}
     </div>
@@ -257,9 +264,16 @@ function CreatePODialog({ suppliers, inventory, prefillItem, onClose, onCreated 
   );
 }
 
-function PODetailDialog({ order, onClose, onPatch, onReceived }) {
+function PODetailDialog({ order, onClose, onPatch, onReceived, onDelete }) {
   const [receiveQty, setReceiveQty] = useState({});
   const [receiving, setReceiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async () => {
+    if (!confirm(`Delete purchase order ${order.reference || `#${order.id}`}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try { await onDelete(order.id); } catch (e) { console.error(e); setDeleting(false); }
+  };
 
   const canEditLines = ["Draft", "Sent"].includes(order.status);
   const canReceive = ["Sent", "Partially Received"].includes(order.status);
@@ -334,7 +348,8 @@ function PODetailDialog({ order, onClose, onPatch, onReceived }) {
             <p className="text-[11px] text-muted-foreground italic">Line items are locked once receiving has started.</p>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="outline" onClick={remove} disabled={deleting} className="text-destructive border-destructive/40 hover:bg-destructive/10">{deleting ? "Deleting…" : "Delete"}</Button>
           <Button onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>

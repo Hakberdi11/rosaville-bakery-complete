@@ -11,6 +11,17 @@ Invoke by name: "Use the bakery-crm-researcher subagent to refresh the research"
 
 Re-run this pipeline whenever it's been a while since the last pass, or the dashboard has changed enough that the gap list might be stale — don't assume `.claude/research/*.md` stays accurate indefinitely.
 
+## The ops pipeline (inventory & day-to-day management)
+
+A second, parallel two-agent pipeline covers ground the pipeline above doesn't: inventory-management practice and general day-to-day operations (staff/task scheduling, loyalty program design, feedback handling) — as opposed to pricing methodology (owned by `bakery-pricing-researcher`/`bakery-pricing-systems-researcher`) or CRM/POS tooling (owned by `bakery-crm-researcher`).
+
+- **`bakery-ops-researcher`** (`.claude/agents/bakery-ops-researcher.md`, sonnet) — researches inventory best practices and general bakery operations/management practice, sourced where possible. Writes to `.claude/research/bakery-ops-research.md`, overwriting each pass.
+- **`bakery-ops-implementer`** (`.claude/agents/bakery-ops-implementer.md`, opus) — reads that research plus the pricing research files, the existing gap analysis (flagging anything in it that's now stale), and Rosaville's actual current code, then writes a prioritized, code-grounded plan to `.claude/research/bakery-ops-implementation-plan.md`. It stops after the plan for a check-in, then implements approved items one at a time.
+
+Invoke by name: "Use the bakery-ops-researcher subagent to refresh the research" / "Use the bakery-ops-implementer subagent to brainstorm a plan" (Phase 1 only) / "Use the bakery-ops-implementer subagent to implement item N" (Phase 2, once you've reviewed the plan).
+
+This pipeline shares the same `dashboard-research` branch and the same **Branching** and **Implementation pacing** rules below as the gap-analysis pipeline — one item at a time, verified, committed, tracked inline in `bakery-ops-implementation-plan.md`, never merged to `main` without asking.
+
 ## Branching
 
 This work happens on the **`dashboard-research`** branch, not `main`. Rules:

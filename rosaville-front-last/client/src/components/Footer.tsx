@@ -22,7 +22,7 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <h3 className="font-serif text-lg font-semibold text-foreground mb-4">
-              Rosaville Desserts
+              {content?.site_name || 'Rosaville Desserts'}
             </h3>
             <p className="font-sans text-sm text-foreground">
               {content?.hero_subtitle || "Handcrafted desserts made with love and the finest ingredients."}
@@ -108,7 +108,7 @@ export default function Footer() {
         {/* Copyright */}
         <div className="border-t border-border pt-8 text-center">
           <p className="font-sans text-sm text-foreground/50">
-            © {currentYear} Rosaville Desserts. All rights reserved. Made with love.
+            © {currentYear} {content?.site_name || 'Rosaville Desserts'}. All rights reserved. Made with love.
           </p>
         </div>
       </div>

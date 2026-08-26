@@ -10,7 +10,8 @@ class DessertSerializer(serializers.ModelSerializer):
             "id", "name", "category", "description", "price",
             "featured_image", "images", "ingredients", "sizes", "allergens", "tags",
             "preparation_time", "availability", "featured", "seasonal", "display_order",
-            "in_gallery", "created_at", "updated_at",
+            "in_gallery", "labor_hours", "batch_yield", "packaging_cost", "target_margin_percent",
+            "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 

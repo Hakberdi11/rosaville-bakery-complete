@@ -23,6 +23,17 @@ class Dessert(models.Model):
     allergens = models.JSONField(default=list, blank=True)
     tags = models.JSONField(default=list, blank=True)
 
+    # Automatic-pricing inputs (see operations.PricingSettings for the
+    # business-wide labor rate/default margin these combine with). Ingredient
+    # cost itself isn't stored here — it's always computed live from
+    # `ingredients`/`sizes` against current InventoryItem.cost_per_unit.
+    labor_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0)  # hours to produce one batch
+    batch_yield = models.PositiveIntegerField(default=1)  # units produced per batch
+    packaging_cost = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # per unit
+    # null = inherit PricingSettings.category_margin_overrides[category], then
+    # PricingSettings.target_margin_percent — see ingredientCalc.js's calculateSuggestedPrice.
+    target_margin_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
     preparation_time = models.CharField(max_length=100, blank=True)
     availability = models.BooleanField(default=True)
     featured = models.BooleanField(default=False)

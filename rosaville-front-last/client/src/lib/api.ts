@@ -304,6 +304,13 @@ export const api = {
       clearTokens();
     },
     isAuthenticated: () => Boolean(getAccessToken()),
+    requestPasswordReset: (email: string) =>
+      request<{ detail: string }>("/api/auth/password-reset/", { method: "POST", body: JSON.stringify({ email }) }),
+    confirmPasswordReset: (uid: string, token: string, newPassword: string) =>
+      request<{ detail: string }>("/api/auth/password-reset-confirm/", {
+        method: "POST",
+        body: JSON.stringify({ uid, token, new_password: newPassword }),
+      }),
   },
   uploadFile: async (file: File) => {
     const formData = new FormData();

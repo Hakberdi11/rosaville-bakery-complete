@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { auth } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export default function Login() {
       icon={LogIn}
       title="Welcome back"
       subtitle="Log in to your account"
+      footer={<Link to="/forgot-password" className="hover:text-foreground hover:underline">Forgot password?</Link>}
     >
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">

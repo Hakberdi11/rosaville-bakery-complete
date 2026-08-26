@@ -26,7 +26,7 @@ export default function About() {
             {content?.about_title || "Our Story"}
           </h1>
           <p className="font-sans text-lg text-foreground/70">
-            A tale of passion, family recipes, and the joy of creating sweet moments.
+            {content?.about_subtitle || "A tale of passion, family recipes, and the joy of creating sweet moments."}
           </p>
         </div>
       </section>
@@ -47,11 +47,11 @@ export default function About() {
       <section className="py-20 bg-background">
         <div className="container">
           <h2 className="font-serif text-4xl font-bold text-foreground text-center mb-16 fade-in">
-            Our Values
+            {content?.about_values_title || "Our Values"}
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {[
+            {(content?.about_values_items?.length ? content.about_values_items : [
               {
                 title: 'Homemade Quality',
                 description: 'Every dessert is handcrafted with the same care you would put into your own kitchen.',
@@ -76,7 +76,7 @@ export default function About() {
                 title: 'Hospitality',
                 description: 'We treat every customer like a cherished guest in our home.',
               },
-            ].map((value, idx) => (
+            ]).map((value, idx) => (
               <div
                 key={idx}
                 className="fade-in-up p-6 rounded-xl border border-primary hover:border-primary hover:bg-background transition-all"

@@ -118,6 +118,13 @@ export default function GiftCards() {
     setSelected(updated);
   };
 
+  const doDelete = async () => {
+    if (!selected || !confirm(`Permanently delete gift card ${selected.code}? This removes it entirely, including its redemption history — voiding is usually the safer choice for a real card. This cannot be undone.`)) return;
+    await entities.GiftCard.delete(selected.id);
+    setCards((p) => p.filter((c) => c.id !== selected.id));
+    setSelected(null);
+  };
+
   return (
     <div className="p-5 lg:p-8 max-w-[1400px] mx-auto">
       <PageHeader
@@ -220,11 +227,14 @@ export default function GiftCards() {
                 </div>
               )}
             </div>
-            <DialogFooter>
-              {selected.is_active && (
-                <Button variant="outline" onClick={doVoid} className="text-rose-600 hover:bg-rose-50 gap-2"><Ban className="w-4 h-4" /> Void</Button>
-              )}
-              <Button onClick={() => setSelected(null)}>Close</Button>
+            <DialogFooter className="sm:justify-between">
+              <Button variant="outline" onClick={doDelete} className="text-destructive border-destructive/40 hover:bg-destructive/10">Delete</Button>
+              <div className="flex gap-2">
+                {selected.is_active && (
+                  <Button variant="outline" onClick={doVoid} className="text-rose-600 hover:bg-rose-50 gap-2"><Ban className="w-4 h-4" /> Void</Button>
+                )}
+                <Button onClick={() => setSelected(null)}>Close</Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>

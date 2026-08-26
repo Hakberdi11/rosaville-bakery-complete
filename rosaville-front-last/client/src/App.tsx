@@ -21,7 +21,13 @@ import Checkout from "./pages/Checkout";
 import ProductDetail from "./pages/ProductDetail";
 import Favourites from "./pages/Favourites";
 import OrderStatus from "./pages/OrderStatus";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Account from "./pages/Account";
 import { CartProvider } from "./contexts/CartContext";
+import { AuthProvider } from "./contexts/AuthContext";
 
 function Router() {
   // Gallery Carousel renders outside Layout (no navbar/footer/cart)
@@ -43,6 +49,11 @@ function Router() {
             <Route path={"/cart"} component={Cart} />
             <Route path={"/checkout"} component={Checkout} />
             <Route path={"/order-status"} component={OrderStatus} />
+            <Route path={"/login"} component={Login} />
+            <Route path={"/signup"} component={Signup} />
+            <Route path={"/forgot-password"} component={ForgotPassword} />
+            <Route path={"/reset-password"} component={ResetPassword} />
+            <Route path={"/account"} component={Account} />
             <Route path={"/gallery"} component={Gallery} />
             <Route path={"/favourites"} component={Favourites} />
             <Route path={"/custom-cakes"} component={CustomCakes} />
@@ -71,12 +82,14 @@ function App() {
           defaultTheme="light"
           // switchable
         >
-          <CartProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </CartProvider>
+          </AuthProvider>
         </ThemeProvider>
       </SiteContentProvider>
     </ErrorBoundary>

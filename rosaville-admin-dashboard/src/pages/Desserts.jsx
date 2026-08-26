@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { entities, uploadFile } from '@/lib/api';
-import { Cake, Plus, Search, Pencil, Trash2, Star, Copy, Upload, Link2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { entities, uploadFile, pricingSettings } from '@/lib/api';
+import { Cake, Plus, Search, Pencil, Trash2, Star, Copy, Upload, Link2, Calculator } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Image } from "@/components/ui/image";
 import { cn } from "@/lib/utils";
 import RecipeEditor from "@/components/admin/RecipeEditor";
+import { calculateSuggestedPrice } from "@/lib/ingredientCalc";
 
 const CATEGORIES = ["Signature Cakes", "Custom Cakes", "Seasonal Specials", "Cupcakes", "Pastries", "Cheesecakes"];
 const FALLBACK_IMAGE = "/placeholder-dessert.svg";
@@ -18,6 +19,7 @@ const FALLBACK_IMAGE = "/placeholder-dessert.svg";
 export default function Desserts() {
   const [desserts, setDesserts] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [pricing, setPricing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -27,11 +29,12 @@ export default function Desserts() {
   const load = async () => {
     setLoading(true);
     try {
-      const [d, i] = await Promise.all([
+      const [d, i, p] = await Promise.all([
         entities.Dessert.list("-display_order", 500),
         entities.InventoryItem.list("-created_date", 500),
+        pricingSettings.get(),
       ]);
-      setDesserts(d); setInventory(i);
+      setDesserts(d); setInventory(i); setPricing(p);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -135,12 +138,12 @@ export default function Desserts() {
         </div>
       )}
 
-      <DessertDialog open={createOpen || !!editItem} item={editItem} inventory={inventory} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
+      <DessertDialog open={createOpen || !!editItem} item={editItem} inventory={inventory} pricing={pricing} onClose={() => { setCreateOpen(false); setEditItem(null); }} onSaved={load} />
     </div>
   );
 }
 
-function DessertDialog({ open, item, inventory, onClose, onSaved }) {
+function DessertDialog({ open, item, inventory, pricing, onClose, onSaved }) {
   const isEdit = !!item;
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -153,9 +156,19 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
         featured_image: "", images: [], ingredients: [], sizes: [],
         allergens: [], preparation_time: "", tags: [],
         availability: true, featured: false, seasonal: false, display_order: 0,
+        labor_hours: 0, batch_yield: 1, packaging_cost: 0, target_margin_percent: "",
       });
     }
   }, [open, item]);
+
+  const breakdown = useMemo(() => {
+    if (!form || !pricing) return null;
+    return calculateSuggestedPrice(
+      { ...form, target_margin_percent: form.target_margin_percent === "" ? null : Number(form.target_margin_percent) },
+      inventory,
+      pricing,
+    );
+  }, [form, inventory, pricing]);
 
   if (!form) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -175,7 +188,14 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const payload = { ...form, price: Number(form.price) || 0 };
+      const payload = {
+        ...form,
+        price: Number(form.price) || 0,
+        labor_hours: Number(form.labor_hours) || 0,
+        batch_yield: Number(form.batch_yield) || 1,
+        packaging_cost: Number(form.packaging_cost) || 0,
+        target_margin_percent: form.target_margin_percent === "" || form.target_margin_percent === null ? null : Number(form.target_margin_percent),
+      };
       if (!payload.featured_image && payload.images?.length) payload.featured_image = payload.images[0];
       if (isEdit) await entities.Dessert.update(item.id, payload);
       else await entities.Dessert.create(payload);
@@ -197,6 +217,13 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
           </div>
           <div><Label>Base Price ($)</Label><Input type="number" value={form.price} onChange={(e) => set("price", e.target.value)} className="mt-1" /></div>
           <div className="col-span-2"><Label>Description</Label><Textarea value={form.description} onChange={(e) => set("description", e.target.value)} className="mt-1" rows={2} /></div>
+
+          {/* Automatic-pricing inputs — combine with Settings → Pricing's labor
+              rate/margin to compute the live "Suggested Price" panel below. */}
+          <div><Label>Labor Hours <span className="text-muted-foreground font-normal text-[11.5px]">(per batch)</span></Label><Input type="number" step="0.1" value={form.labor_hours} onChange={(e) => set("labor_hours", e.target.value)} className="mt-1" /></div>
+          <div><Label>Batch Yield <span className="text-muted-foreground font-normal text-[11.5px]">(units per batch)</span></Label><Input type="number" min="1" value={form.batch_yield} onChange={(e) => set("batch_yield", e.target.value)} className="mt-1" /></div>
+          <div><Label>Packaging Cost ($) <span className="text-muted-foreground font-normal text-[11.5px]">(per unit)</span></Label><Input type="number" step="0.01" value={form.packaging_cost} onChange={(e) => set("packaging_cost", e.target.value)} className="mt-1" /></div>
+          <div><Label>Margin Override % <span className="text-muted-foreground font-normal text-[11.5px]">(blank = default)</span></Label><Input type="number" step="0.01" value={form.target_margin_percent} onChange={(e) => set("target_margin_percent", e.target.value)} className="mt-1" placeholder={pricing ? `${pricing.target_margin_percent}% default` : ""} /></div>
 
           {/* Image: upload OR url */}
           <div className="col-span-2">
@@ -229,6 +256,25 @@ function DessertDialog({ open, item, inventory, onClose, onSaved }) {
             onIngredientsChange={(ings) => set("ingredients", ings)}
             onSizesChange={(sizes) => set("sizes", sizes)}
           />
+
+          {breakdown && (
+            <div className="col-span-2 rounded-xl border border-border/60 bg-muted/20 p-3.5">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Calculator className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-[12.5px] font-semibold">Suggested Price</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[11.5px] mb-3">
+                <div className="flex justify-between sm:block"><span className="text-muted-foreground">Ingredients</span> <span className="font-medium tabular-nums">${breakdown.ingredientCost.toFixed(2)}</span></div>
+                <div className="flex justify-between sm:block"><span className="text-muted-foreground">Labor</span> <span className="font-medium tabular-nums">${breakdown.laborCost.toFixed(2)}</span></div>
+                <div className="flex justify-between sm:block"><span className="text-muted-foreground">Packaging</span> <span className="font-medium tabular-nums">${breakdown.packagingCost.toFixed(2)}</span></div>
+                <div className="flex justify-between sm:block"><span className="text-muted-foreground">Total Cost</span> <span className="font-medium tabular-nums">${breakdown.totalCost.toFixed(2)}</span></div>
+              </div>
+              <div className="flex items-center justify-between pt-2.5 border-t border-border/60">
+                <div className="text-[11.5px] text-muted-foreground">Margin {breakdown.marginPercent}% → <span className="font-semibold text-[14px] text-emerald-600 dark:text-emerald-400">${breakdown.suggestedPrice.toFixed(2)}</span></div>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => set("price", breakdown.suggestedPrice.toFixed(2))}>Use This Price</Button>
+              </div>
+            </div>
+          )}
 
           <div className="col-span-2"><Label>Allergens (comma separated)</Label><Input value={form.allergens?.join(", ")} onChange={(e) => setList("allergens", e.target.value)} className="mt-1" /></div>
           <div><Label>Preparation Time</Label><Input value={form.preparation_time} onChange={(e) => set("preparation_time", e.target.value)} className="mt-1" placeholder="e.g. 2 hours" /></div>

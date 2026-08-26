@@ -61,6 +61,12 @@ export default function Orders() {
     if (selected?.id === id) setSelected(updated);
   };
 
+  const deleteOrder = async (id) => {
+    await entities.Order.delete(id);
+    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setSelected(null);
+  };
+
   const totalValue = filtered.reduce((s, o) => s + (o.total_value || 0), 0);
 
   const exportCsv = () => {
@@ -180,7 +186,8 @@ export default function Orders() {
         <OrderDetail order={selected} desserts={desserts} inventory={inventory}
           onClose={() => setSelected(null)}
           onStatus={updateStatus}
-          onAmountPaid={updateAmountPaid} />
+          onAmountPaid={updateAmountPaid}
+          onDelete={deleteOrder} />
       )}
 
       <CreateOrderDialog open={createOpen} desserts={desserts} inventory={inventory}
@@ -213,10 +220,17 @@ function IngredientSummary({ items, desserts, inventory }) {
   );
 }
 
-function OrderDetail({ order, desserts, inventory, onClose, onStatus, onAmountPaid }) {
+function OrderDetail({ order, desserts, inventory, onClose, onStatus, onAmountPaid, onDelete }) {
   const [amountPaidInput, setAmountPaidInput] = useState(String(order.amount_paid ?? 0));
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => setAmountPaidInput(String(order.amount_paid ?? 0)), [order.id, order.amount_paid]);
   const balanceDue = (Number(order.total_value) || 0) - (Number(order.amount_paid) || 0);
+
+  const remove = async () => {
+    if (!confirm(`Delete order ${order.order_number || `#${order.id}`}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try { await onDelete(order.id); } catch (e) { console.error(e); setDeleting(false); }
+  };
 
   return (
     <Dialog open={!!order} onOpenChange={(v) => !v && onClose()}>
@@ -285,6 +299,9 @@ function OrderDetail({ order, desserts, inventory, onClose, onStatus, onAmountPa
             <div><div className="text-[11px] text-muted-foreground uppercase mb-1">Internal Notes</div><div className="text-[12.5px] p-3 rounded-lg bg-muted/50">{order.internal_notes}</div></div>
           )}
         </div>
+        <DialogFooter className="sm:justify-start">
+          <Button variant="outline" onClick={remove} disabled={deleting} className="text-destructive border-destructive/40 hover:bg-destructive/10">{deleting ? "Deleting…" : "Delete Order"}</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

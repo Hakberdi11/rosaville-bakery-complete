@@ -1,6 +1,26 @@
 from django.db import models
 
 
+def _default_home_why_choose_items():
+    return [
+        {"title": "Premium Ingredients", "description": "Only the finest, freshest ingredients sourced from trusted suppliers."},
+        {"title": "Handcrafted Quality", "description": "Every dessert is made by hand with care and attention to detail."},
+        {"title": "Custom Creations", "description": "Your vision, our expertise. We create personalized desserts for your special moments."},
+        {"title": "Family Recipe", "description": "Generations of baking excellence passed down through our family."},
+    ]
+
+
+def _default_about_values_items():
+    return [
+        {"title": "Homemade Quality", "description": "Every dessert is handcrafted with the same care you would put into your own kitchen."},
+        {"title": "Fresh Ingredients", "description": "We source the finest, freshest ingredients to ensure every bite is exceptional."},
+        {"title": "Family Atmosphere", "description": "Our café is a warm, welcoming space where everyone feels like family."},
+        {"title": "Attention to Detail", "description": "From presentation to flavor, every element is thoughtfully considered."},
+        {"title": "Customization", "description": "Your dessert, your way. We love creating personalized creations for your special moments."},
+        {"title": "Hospitality", "description": "We treat every customer like a cherished guest in our home."},
+    ]
+
+
 class ContactRequest(models.Model):
     """Unifies Base44's `ContactRequest` entity and front-last's old `contactMessages` table."""
 
@@ -133,6 +153,55 @@ class SiteContent(models.Model):
 
     primary_color = models.CharField(max_length=7, default="#C9949B")
     accent_color = models.CharField(max_length=7, default="#C97A85")
+    # Core palette beyond primary/accent. cta/cta-hover (the "Add to Cart"
+    # button color) is deliberately NOT owner-configurable here — see the
+    # comment on those CSS vars in rosaville-front-last/client/src/index.css.
+    background_color = models.CharField(max_length=7, default="#FBF7F4")
+    foreground_color = models.CharField(max_length=7, default="#3D2817")
+    border_color = models.CharField(max_length=7, default="#E8D4D8")
+    muted_color = models.CharField(max_length=7, default="#F0D4D8")
+
+    class HeadingFont(models.TextChoices):
+        PLAYFAIR = "Playfair Display", "Playfair Display"
+        CORMORANT = "Cormorant Garamond", "Cormorant Garamond"
+        MERRIWEATHER = "Merriweather", "Merriweather"
+        LIBRE_BASKERVILLE = "Libre Baskerville", "Libre Baskerville"
+        DM_SERIF = "DM Serif Display", "DM Serif Display"
+        LORA = "Lora", "Lora"
+
+    class BodyFont(models.TextChoices):
+        POPPINS = "Poppins", "Poppins"
+        LATO = "Lato", "Lato"
+        MONTSERRAT = "Montserrat", "Montserrat"
+        NUNITO_SANS = "Nunito Sans", "Nunito Sans"
+        INTER = "Inter", "Inter"
+        WORK_SANS = "Work Sans", "Work Sans"
+
+    # Curated pairs only (see CMS.jsx's Typography dropdown) — heading_font
+    # and body_font are always set together from one of the FONT_PAIRS below,
+    # never mixed independently, so the two choice lists just need to contain
+    # the values that appear in FONT_PAIRS.
+    heading_font = models.CharField(max_length=40, choices=HeadingFont.choices, default=HeadingFont.PLAYFAIR)
+    body_font = models.CharField(max_length=40, choices=BodyFont.choices, default=BodyFont.POPPINS)
+
+    site_name = models.CharField(max_length=255, default="Rosaville Desserts")
+
+    home_why_choose_title = models.CharField(max_length=255, default="Why Choose Rosaville")
+    home_why_choose_subtitle = models.CharField(
+        max_length=500, default="We're committed to excellence in every bite."
+    )
+    # [{"title": "...", "description": "..."}, ...]
+    home_why_choose_items = models.JSONField(default=_default_home_why_choose_items, blank=True)
+
+    about_subtitle = models.CharField(
+        max_length=500,
+        default="A tale of passion, family recipes, and the joy of creating sweet moments.",
+    )
+    about_values_title = models.CharField(max_length=255, default="Our Values")
+    # [{"title": "...", "description": "..."}, ...]
+    about_values_items = models.JSONField(default=_default_about_values_items, blank=True)
+
+    show_testimonials = models.BooleanField(default=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 

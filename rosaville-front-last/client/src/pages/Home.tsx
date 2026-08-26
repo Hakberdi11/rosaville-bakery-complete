@@ -342,15 +342,15 @@ export default function Home() {
         <div className="container max-w-4xl">
           <div className="text-center mb-16 fade-in">
             <h2 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Why Choose Rosaville
+              {content?.home_why_choose_title || "Why Choose Rosaville"}
             </h2>
             <p className="font-sans text-lg text-foreground/80">
-              We're committed to excellence in every bite.
+              {content?.home_why_choose_subtitle || "We're committed to excellence in every bite."}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[
+            {(content?.home_why_choose_items?.length ? content.home_why_choose_items : [
               {
                 title: 'Premium Ingredients',
                 description: 'Only the finest, freshest ingredients sourced from trusted suppliers.',
@@ -367,7 +367,7 @@ export default function Home() {
                 title: 'Family Recipe',
                 description: 'Generations of baking excellence passed down through our family.',
               },
-            ].map((item, idx) => (
+            ]).map((item, idx) => (
               <div
                 key={idx}
                 className="fade-in-up p-8 rounded-xl bg-white shadow-lg hover:shadow-xl transition-shadow border border-border"

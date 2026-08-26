@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { entities } from '@/lib/api';
-import { Sparkles, Plus, Archive, Star } from "lucide-react";
+import { Sparkles, Plus, Archive, Star, Trash2 } from "lucide-react";
 import PageHeader, { EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,12 @@ export default function SpecialOfMonth() {
     load();
   };
 
+  const remove = async (s) => {
+    if (!confirm(`Delete "${s.display_title}" from past specials? This cannot be undone.`)) return;
+    await entities.SpecialOfMonth.delete(s.id);
+    setSpecials((p) => p.filter((x) => x.id !== s.id));
+  };
+
   return (
     <div className="p-5 lg:p-8 max-w-[1000px] mx-auto">
       <PageHeader
@@ -73,9 +79,14 @@ export default function SpecialOfMonth() {
                 </div>
                 <h2 className="font-heading font-bold text-[19px] mb-1.5">{current.display_title}</h2>
                 <p className="text-[13px] text-muted-foreground leading-relaxed mb-4 line-clamp-3">{current.display_story}</p>
-                <Button size="sm" variant="outline" className="gap-2" onClick={() => archiveCurrent(current)}>
-                  <Archive className="w-3.5 h-3.5" /> Archive
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-2" onClick={() => archiveCurrent(current)}>
+                    <Archive className="w-3.5 h-3.5" /> Archive
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-2 text-destructive border-destructive/40 hover:bg-destructive/10" onClick={() => remove(current)}>
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -93,7 +104,12 @@ export default function SpecialOfMonth() {
                   <div className="p-3">
                     <div className="text-[11px] text-muted-foreground mb-0.5">{s.month_label}</div>
                     <div className="font-heading font-semibold text-[13.5px] mb-2 line-clamp-1">{s.display_title}</div>
-                    <button onClick={() => reactivate(s)} className="text-[11.5px] font-medium text-rose-600 hover:underline">Make live again</button>
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => reactivate(s)} className="text-[11.5px] font-medium text-rose-600 hover:underline">Make live again</button>
+                      <button onClick={() => remove(s)} title="Delete" className="w-6 h-6 rounded-lg border border-border hover:bg-destructive/10 hover:border-destructive/40 inline-flex items-center justify-center">
+                        <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

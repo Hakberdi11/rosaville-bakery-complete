@@ -18,14 +18,38 @@ function readableForeground(hex: string): string {
   return luminance > 0.6 ? "#2C1810" : "#FFFFFF";
 }
 
-function applyBrandColors(primary: string, accent: string) {
+function applyBrandColors(data: SiteContent) {
   const root = document.documentElement.style;
-  root.setProperty("--primary", primary);
-  root.setProperty("--primary-foreground", readableForeground(primary));
-  root.setProperty("--secondary", primary);
-  root.setProperty("--ring", primary);
-  root.setProperty("--accent", accent);
-  root.setProperty("--accent-foreground", readableForeground(accent));
+  root.setProperty("--primary", data.primary_color);
+  root.setProperty("--primary-foreground", readableForeground(data.primary_color));
+  root.setProperty("--secondary", data.primary_color);
+  root.setProperty("--ring", data.primary_color);
+  root.setProperty("--accent", data.accent_color);
+  root.setProperty("--accent-foreground", readableForeground(data.accent_color));
+  if (data.background_color) {
+    root.setProperty("--background", data.background_color);
+    root.setProperty("--sidebar", data.background_color);
+  }
+  if (data.foreground_color) {
+    root.setProperty("--foreground", data.foreground_color);
+    root.setProperty("--card-foreground", data.foreground_color);
+    root.setProperty("--popover-foreground", data.foreground_color);
+    root.setProperty("--secondary-foreground", data.foreground_color);
+    root.setProperty("--sidebar-foreground", data.foreground_color);
+  }
+  if (data.border_color) {
+    root.setProperty("--border", data.border_color);
+    root.setProperty("--sidebar-border", data.border_color);
+  }
+  if (data.muted_color) {
+    root.setProperty("--muted", data.muted_color);
+  }
+  if (data.heading_font) {
+    root.setProperty("--font-heading", `'${data.heading_font}', serif`);
+  }
+  if (data.body_font) {
+    root.setProperty("--font-body", `'${data.body_font}', sans-serif`);
+  }
 }
 
 export function SiteContentProvider({ children }: { children: React.ReactNode }) {
@@ -37,7 +61,7 @@ export function SiteContentProvider({ children }: { children: React.ReactNode })
       .get()
       .then((data) => {
         setContent(data);
-        applyBrandColors(data.primary_color, data.accent_color);
+        applyBrandColors(data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

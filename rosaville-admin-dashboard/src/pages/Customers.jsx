@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { entities } from '@/lib/api';
-import { Users, Search, Plus, Mail, Phone, MapPin, ShoppingBag, Star, Minus } from "lucide-react";
+import { Users, Search, Plus, Mail, Phone, MapPin, ShoppingBag, Star, Minus, UserCheck } from "lucide-react";
 import PageHeader, { StatusBadge, EmptyState } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState("All");
+  const [accountsOnly, setAccountsOnly] = useState(false);
   const [selected, setSelected] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -32,17 +33,19 @@ export default function Customers() {
   const filtered = useMemo(() => customers.filter((c) => {
     const ms = !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase());
     const mc = segmentFilter === "All" || c.segment === segmentFilter;
-    return ms && mc;
-  }), [customers, search, segmentFilter]);
+    const ma = !accountsOnly || c.user;
+    return ms && mc && ma;
+  }), [customers, search, segmentFilter, accountsOnly]);
 
   const totalRevenue = customers.reduce((s, c) => s + (c.total_spend || 0), 0);
   const avgLTV = customers.length ? totalRevenue / customers.length : 0;
+  const registeredCount = customers.filter((c) => c.user).length;
 
   return (
     <div className="p-5 lg:p-8 max-w-[1400px] mx-auto">
       <PageHeader
         title="Customers"
-        description={`${customers.length} customers · $${totalRevenue.toLocaleString()} lifetime revenue · $${avgLTV.toFixed(0)} avg LTV`}
+        description={`${customers.length} customers · ${registeredCount} with an account · $${totalRevenue.toLocaleString()} lifetime revenue · $${avgLTV.toFixed(0)} avg LTV`}
         icon={Users}
         actions={<Button size="sm" className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4" /> Add Customer</Button>}
       />
@@ -60,6 +63,11 @@ export default function Customers() {
               {s}
             </button>
           ))}
+          <button onClick={() => setAccountsOnly((v) => !v)}
+            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium whitespace-nowrap border transition-colors",
+              accountsOnly ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground")}>
+            <UserCheck className="w-3.5 h-3.5" /> Has Account
+          </button>
         </div>
       </div>
 
@@ -75,7 +83,10 @@ export default function Customers() {
               <button key={c.id} onClick={() => setSelected(c)} className="w-full text-left p-4 hover:bg-muted/30 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500/20 to-blue-500/20 flex items-center justify-center text-[12px] font-semibold text-violet-600 dark:text-violet-400 shrink-0">{c.name?.split(" ").map(n => n[0]).slice(0, 2).join("") || "?"}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-[13.5px] truncate">{c.name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="font-medium text-[13.5px] truncate">{c.name}</div>
+                    {c.user && <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" title="Has an account" />}
+                  </div>
                   <div className="text-[11.5px] text-muted-foreground truncate">{c.email || "—"}</div>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-[11px] text-muted-foreground">{c.order_count || 0} orders</span>
@@ -108,6 +119,7 @@ export default function Customers() {
                           {c.name?.split(" ").map(n => n[0]).slice(0, 2).join("") || "?"}
                         </div>
                         <div className="font-medium">{c.name}</div>
+                        {c.user && <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" title="Has an account" />}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{c.email || "—"}</td>
@@ -125,17 +137,35 @@ export default function Customers() {
         )}
       </div>
 
-      {selected && <CustomerDetail customer={selected} onClose={() => setSelected(null)} onUpdated={(c) => { setCustomers((p) => p.map((x) => x.id === c.id ? c : x)); setSelected(c); }} />}
+      {selected && (
+        <CustomerDetail
+          customer={selected}
+          onClose={() => setSelected(null)}
+          onUpdated={(c) => { setCustomers((p) => p.map((x) => x.id === c.id ? c : x)); setSelected(c); }}
+          onDeleted={(id) => { setCustomers((p) => p.filter((x) => x.id !== id)); setSelected(null); }}
+        />
+      )}
       <CreateCustomerDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
     </div>
   );
 }
 
-function CustomerDetail({ customer, onClose, onUpdated }) {
+function CustomerDetail({ customer, onClose, onUpdated, onDeleted }) {
   const [notes, setNotes] = useState(customer.notes || "");
   const [segment, setSegment] = useState(customer.segment || "New");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [adjustingPoints, setAdjustingPoints] = useState(false);
+
+  const remove = async () => {
+    if (!confirm(`Delete customer "${customer.name}"? This cannot be undone. Their past orders will stay on record but no longer be linked to this customer.`)) return;
+    setDeleting(true);
+    try {
+      await entities.Customer.delete(customer.id);
+      onDeleted(customer.id);
+    } catch (e) { console.error(e); }
+    setDeleting(false);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -168,7 +198,14 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
             </div>
             <div>
               <div className="font-heading font-semibold text-[16px]">{customer.name}</div>
-              <div className="flex items-center gap-2 mt-0.5"><StatusBadge status={customer.segment} /></div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <StatusBadge status={customer.segment} />
+                {customer.user && (
+                  <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    <UserCheck className="w-3.5 h-3.5" /> Has an account
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -212,9 +249,12 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-1" placeholder="Add customer notes, preferences, allergies…" />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={save} disabled={saving} className="bg-rose-600 hover:bg-rose-700">{saving ? "Saving…" : "Save Changes"}</Button>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="outline" onClick={remove} disabled={deleting} className="text-destructive border-destructive/40 hover:bg-destructive/10">{deleting ? "Deleting…" : "Delete Customer"}</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Close</Button>
+            <Button onClick={save} disabled={saving} className="bg-rose-600 hover:bg-rose-700">{saving ? "Saving…" : "Save Changes"}</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

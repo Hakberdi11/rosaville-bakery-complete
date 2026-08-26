@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny
 
 from accounts.permissions import CreateOnlyOrIsStaff, IsStaff, ReadOnlyOrIsStaff
 
+from .brevo import sync_subscriber
 from .models import ContactRequest, CustomCakeOrder, NewsletterSubscriber, SiteContent, TeamMember
 from .serializers import (
     ContactRequestSerializer,
@@ -41,9 +42,16 @@ class NewsletterSubscriberViewSet(viewsets.ModelViewSet):
     queryset = NewsletterSubscriber.objects.all()
     serializer_class = NewsletterSubscriberSerializer
     permission_classes = [CreateOnlyOrIsStaff]
-    http_method_names = ["get", "post", "head", "options"]
+    # PUT/PATCH deliberately still excluded — a subscriber row is either there
+    # or not, nothing on it is staff-editable. DELETE is allowed so staff can
+    # remove test/bounced/unsubscribed entries from the Newsletter page.
+    http_method_names = ["get", "post", "delete", "head", "options"]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = "__all__"
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        sync_subscriber(instance.email)
 
 
 class SiteContentView(generics.RetrieveUpdateAPIView):

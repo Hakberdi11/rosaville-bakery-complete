@@ -84,6 +84,8 @@
   --cta: #A8C9B8;
   --cta-hover: #96B8A6;
   --cta-foreground: #FFFFFF;
+  --font-heading: 'Playfair Display', serif;
+  --font-body: 'Poppins', sans-serif;
 }
 
 .dark {
@@ -179,11 +181,11 @@
   }
 
   .font-serif {
-    font-family: 'Playfair Display', serif;
+    font-family: var(--font-heading, 'Playfair Display', serif);
   }
 
   .font-sans {
-    font-family: 'Poppins', sans-serif;
+    font-family: var(--font-body, 'Poppins', sans-serif);
   }
 
   /* Pastel color utilities */

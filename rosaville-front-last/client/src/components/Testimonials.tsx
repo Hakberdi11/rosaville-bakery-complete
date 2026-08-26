@@ -1,63 +1,21 @@
+import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { Link } from "wouter";
+import { api, PublicFeedback } from "@/lib/api";
+import { useSiteContent } from "@/contexts/SiteContentContext";
 
-interface Testimonial {
-  id: string;
-  name: string;
-  role: string;
-  content: string;
-  rating: number;
-  imageUrl: string;
-}
-
-const testimonials: Testimonial[] = [
-  {
-    id: "1",
-    name: "Sarah Mitchell",
-    role: "Wedding Client",
-    content:
-      "The lavender dream cake was absolutely stunning! Not only did it look beautiful, but it tasted even better. Our guests couldn't stop raving about it. Highly recommend!",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
-  },
-  {
-    id: "2",
-    name: "James Chen",
-    role: "Corporate Event Organizer",
-    content:
-      "We ordered custom cakes for our company's annual gala. The team was incredibly professional and delivered exactly what we envisioned. The desserts were a huge hit!",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
-  },
-  {
-    id: "3",
-    name: "Emma Rodriguez",
-    role: "Birthday Party Host",
-    content:
-      "My daughter's birthday cake was perfect! The chocolate decadence with fresh berries was her favorite. The presentation was Instagram-worthy and the taste was divine.",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
-  },
-  {
-    id: "4",
-    name: "Michael Thompson",
-    role: "Regular Customer",
-    content:
-      "I've been ordering from Rosaville for over a year now. Every cake is consistently delicious and beautifully made. The customer service is exceptional!",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop",
-  },
-];
-
-/**
- * Customer Testimonials Section
- * Displays 4 customer reviews with ratings to build trust and social proof
- */
 export default function Testimonials() {
+  const { content } = useSiteContent();
+  const [testimonials, setTestimonials] = useState<PublicFeedback[]>([]);
+
+  useEffect(() => {
+    api.feedback.public().then(setTestimonials).catch(() => {});
+  }, []);
+
+  if (content?.show_testimonials === false || testimonials.length === 0) {
+    return null;
+  }
+
   return (
     <section className="w-full bg-background py-20 md:py-32 px-4">
       <div className="max-w-6xl mx-auto">
@@ -91,24 +49,19 @@ export default function Testimonials() {
 
               {/* Testimonial Content */}
               <p className="font-sans text-foreground leading-relaxed mb-6 italic">
-                "{testimonial.content}"
+                "{testimonial.message}"
               </p>
 
               {/* Customer Info */}
-              <div className="flex items-center gap-4">
-                <img
-                  src={testimonial.imageUrl}
-                  alt={testimonial.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-primary"
-                />
-                <div>
-                  <p className="font-serif font-bold text-foreground">
-                    {testimonial.name}
-                  </p>
+              <div>
+                <p className="font-serif font-bold text-foreground">
+                  {testimonial.customer_name}
+                </p>
+                {testimonial.dessert_name && (
                   <p className="font-sans text-sm text-foreground/60">
-                    {testimonial.role}
+                    on {testimonial.dessert_name}
                   </p>
-                </div>
+                )}
               </div>
             </div>
           ))}
