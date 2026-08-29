@@ -170,8 +170,23 @@ function DessertDialog({ open, item, inventory, pricing, onClose, onSaved }) {
     );
   }, [form, inventory, pricing]);
 
+  // calculateSuggestedPrice already accepts a size label and scales labor by
+  // that size's multiplier (and uses the size's own ingredient list, if one
+  // is set) — it just wasn't being called per-size anywhere in the UI.
+  const sizeBreakdowns = useMemo(() => {
+    if (!form || !pricing || !form.sizes?.length) return [];
+    const dessertForCalc = { ...form, target_margin_percent: form.target_margin_percent === "" ? null : Number(form.target_margin_percent) };
+    return form.sizes.map((s) => ({
+      size: s,
+      breakdown: calculateSuggestedPrice(dessertForCalc, inventory, pricing, s.label),
+    }));
+  }, [form, inventory, pricing]);
+
   if (!form) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const applySizePrice = (label, price) => {
+    set("sizes", form.sizes.map((s) => (s.label === label ? { ...s, price: Number(price.toFixed(2)) } : s)));
+  };
   const setList = (k, v) => set(k, v.split(",").map((s) => s.trim()).filter(Boolean));
 
   const onUpload = async (e) => {
@@ -273,6 +288,21 @@ function DessertDialog({ open, item, inventory, pricing, onClose, onSaved }) {
                 <div className="text-[11.5px] text-muted-foreground">Margin {breakdown.marginPercent}% → <span className="font-semibold text-[14px] text-emerald-600 dark:text-emerald-400">${breakdown.suggestedPrice.toFixed(2)}</span></div>
                 <Button type="button" variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => set("price", breakdown.suggestedPrice.toFixed(2))}>Use This Price</Button>
               </div>
+
+              {sizeBreakdowns.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border/60 space-y-1.5">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-1.5">Suggested Price by Size</div>
+                  {sizeBreakdowns.map(({ size, breakdown: sb }) => (
+                    <div key={size.label} className="flex items-center justify-between text-[12px]">
+                      <span className="text-muted-foreground">{size.label || "Untitled size"} <span className="text-[10.5px]">({size.multiplier}×)</span></span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">${sb.suggestedPrice.toFixed(2)}</span>
+                        <button type="button" onClick={() => applySizePrice(size.label, sb.suggestedPrice)} className="text-[11px] text-muted-foreground hover:text-foreground underline">Use</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
