@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { auth, pricingSettings } from '@/lib/api';
-import { Settings as SettingsIcon, Save, Store, Globe, Bell, Calculator, Plus, X } from "lucide-react";
+import { auth, pricingSettings, integrations } from '@/lib/api';
+import { Settings as SettingsIcon, Save, Store, Globe, Bell, Calculator, Plus, X, Share2, Instagram, Facebook, Music2 } from "lucide-react";
 import PageHeader from "@/components/admin/PageHeader";
+import SocialAccountCard from "@/components/admin/SocialAccountCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,9 @@ export default function Settings() {
   });
   const [categoryMargins, setCategoryMargins] = useState([]); // [{category, percent}] — dict on the wire
   const [pricingSaving, setPricingSaving] = useState(false);
+
+  const [socialAccounts, setSocialAccounts] = useState([]);
+  const loadSocialAccounts = () => integrations.listAccounts().then(setSocialAccounts).catch((e) => console.error(e));
 
   useEffect(() => {
     if (user) {
@@ -56,6 +60,7 @@ export default function Settings() {
       });
       setCategoryMargins(Object.entries(data.category_margin_overrides || {}).map(([category, percent]) => ({ category, percent })));
     }).catch((e) => console.error(e));
+    loadSocialAccounts();
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -176,6 +181,27 @@ export default function Settings() {
               ))}
               {categoryMargins.length === 0 && <p className="text-[11.5px] text-muted-foreground italic">No category overrides — every dessert uses the default margin above unless it sets its own.</p>}
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card p-5">
+          <div className="flex items-center gap-2 mb-4"><Share2 className="w-4 h-4 text-sky-500" /><h3 className="font-heading font-semibold text-[15px]">Social Accounts</h3></div>
+          <p className="text-[12px] text-muted-foreground mb-4">Connect Instagram, Facebook, and TikTok to see real follower/engagement numbers on the Social Media page.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { platform: "instagram", label: "Instagram", icon: Instagram },
+              { platform: "facebook", label: "Facebook", icon: Facebook },
+              { platform: "tiktok", label: "TikTok", icon: Music2 },
+            ].map(({ platform, label, icon }) => (
+              <SocialAccountCard
+                key={platform}
+                platform={platform}
+                label={label}
+                icon={icon}
+                account={socialAccounts.find((a) => a.platform === platform)}
+                onChanged={loadSocialAccounts}
+              />
+            ))}
           </div>
         </div>
       </div>

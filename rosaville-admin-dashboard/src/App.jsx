@@ -30,6 +30,7 @@ import Production from '@/pages/Production';
 import Recipes from '@/pages/Recipes';
 import Employees from '@/pages/Employees';
 import Team from '@/pages/Team';
+import SocialMedia from '@/pages/SocialMedia';
 import Tasks from '@/pages/Tasks';
 import Marketing from '@/pages/Marketing';
 import Newsletter from '@/pages/Newsletter';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
           <Route path="/marketing" element={<Marketing />} />
           <Route path="/newsletter" element={<Newsletter />} />
           <Route path="/cms" element={<CMS />} />
+          <Route path="/social-media" element={<SocialMedia />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/settings" element={<Settings />} />

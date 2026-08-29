@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "catalog",
     "operations",
     "storefront",
+    "integrations",
 ]
 
 MIDDLEWARE = [
@@ -183,6 +184,17 @@ if SUPABASE_S3_BUCKET:
         AWS_S3_CUSTOM_DOMAIN = f"{supabase_host}/storage/v1/object/public/{SUPABASE_S3_BUCKET}"
 else:
     STORAGES["default"] = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+
+# Social media self-service connect (Instagram/Facebook via one Meta app,
+# TikTok via its own app). Left unset means "not configured" — connect
+# endpoints return a clear 400 instead of crashing until the owner supplies
+# real developer-app credentials. Each provider's app config needs the exact
+# redirect URI f"{BACKEND_URL}/api/integrations/<platform>/callback/".
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
+META_APP_ID = os.environ.get("META_APP_ID")
+META_APP_SECRET = os.environ.get("META_APP_SECRET")
+TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY")
+TIKTOK_CLIENT_SECRET = os.environ.get("TIKTOK_CLIENT_SECRET")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -136,6 +136,13 @@ export const loyaltySettings = {
   update: (payload) => request("/api/loyalty-settings/", { method: "PATCH", body: JSON.stringify(payload) }),
 };
 
+export const integrations = {
+  listAccounts: () => request("/api/integrations/accounts/"),
+  getConnectUrl: (platform) => request(`/api/integrations/${platform}/connect/`, { method: "POST" }),
+  disconnect: (platform) => request(`/api/integrations/${platform}/disconnect/`, { method: "POST" }),
+  getAnalytics: (platform) => request(`/api/integrations/${platform}/analytics/`),
+};
+
 export const auth = {
   login: async (email, password) => {
     const data = await request("/api/auth/login/", {

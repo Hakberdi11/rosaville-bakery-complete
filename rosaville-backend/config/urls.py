@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/", include("catalog.urls")),
     path("api/", include("operations.urls")),
     path("api/", include("storefront.urls")),
+    path("api/", include("integrations.urls")),
 ]
 
 if settings.DEBUG:
