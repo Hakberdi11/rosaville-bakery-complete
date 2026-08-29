@@ -2,7 +2,19 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+// How long a toast stays on screen before auto-dismissing. This vendored
+// component shipped with no auto-dismiss wired up at all: ADD_TOAST never
+// scheduled removal (only an explicit .dismiss() call did, via
+// addToRemoveQueue below), and this Toast component is a stripped-down
+// custom one rather than real Radix — it ignores `open`/`onOpenChange`
+// entirely (plain divs, ...spread), so nothing here reads "closed" state
+// visually either. The *only* thing that actually removes a toast from
+// screen is REMOVE_TOAST filtering it out of the toasts array, which is
+// scheduled by addToRemoveQueue using TOAST_REMOVE_DELAY. That was left at
+// 1000000ms (~16.6 minutes) — the actual reason "Settings saved" and every
+// other toast sat on screen indefinitely.
+const TOAST_AUTO_DISMISS_DELAY = 4000;
+const TOAST_REMOVE_DELAY = 300;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -133,6 +145,8 @@ function toast({ ...props }) {
       },
     },
   });
+
+  setTimeout(dismiss, TOAST_AUTO_DISMISS_DELAY);
 
   return {
     id,

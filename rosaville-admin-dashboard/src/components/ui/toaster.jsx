@@ -13,7 +13,10 @@ export function Toaster() {
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {toasts.map(function ({ id, title, description, action, open, onOpenChange, ...props }) {
+        // open/onOpenChange are dropped here: this Toast is a plain div, not
+        // real Radix, so it doesn't understand either prop — spreading them
+        // through just produced a harmless but noisy React console warning.
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
